@@ -306,6 +306,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
                f"Would ban: {len(deleted_found)} deleted/banned account(s):\n{ids}\n\n"
                f"Use 'Cross-check & Ban' to actually ban them.")
         log(msg)
+        log("Cross-check finished. Check the log file for full name update details.")
         send_with_menu(admin_id, msg)
         conn.close()
         return
@@ -348,6 +349,8 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
            f"Banned: {banned} deleted/banned accounts\n"
            f"Failed: {failed}")
     log(msg)
+    log("Cross-check & ban finished. Check the log file for full name update details.")
+    log("─" * 50)
     send_with_menu(admin_id, msg)
 
 # ── Scan ──────────────────────────────────────────────────────────────────────
