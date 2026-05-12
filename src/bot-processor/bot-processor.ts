@@ -1067,8 +1067,10 @@ export class BotProcessor {
                     .limit(10)
                     .getMany()
 
-                ctx.reply(this.buildImpersonatorReport(records))
+                const report = this.buildImpersonatorReport(records)
+                ctx.reply(report)
                 this.log(`Admin ${this.adminName(ctx.message.from.id)} requested impersonator report`)
+                this.log(report)
             } catch (e) {
                 this.log("Error fetching impersonator report", { message: e.message })
             }
@@ -1092,8 +1094,10 @@ export class BotProcessor {
                     .limit(10)
                     .getMany()
 
-                ctx.reply(this.buildImpersonatorReport(records))
+                const report = this.buildImpersonatorReport(records)
+                ctx.reply(report)
                 this.log(`Admin ${this.adminName(ctx.update.callback_query.from.id)} requested impersonator report via menu`)
+                this.log(report)
             } catch (e) {
                 this.log("Error fetching impersonator report", { message: e.message })
                 ctx.reply('Error fetching report. Please try again.')
@@ -1436,7 +1440,7 @@ export class BotProcessor {
                 const today = new Date().toISOString().slice(0, 10)
                 const logPath = path.join(__dirname, '../../logs/bot-' + today + '.log')
                 const logStream = fs.openSync(logPath, 'a')
-                const proc = spawn('python3', [scriptPath, command, String(adminId), botToken], {
+                const proc = spawn('python3', ['-u', scriptPath, command, String(adminId), botToken], {
                     cwd: path.join(__dirname, '../..'),
                     detached: true,
                     stdio: ['ignore', 'pipe', 'pipe']
