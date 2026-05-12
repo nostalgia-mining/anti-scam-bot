@@ -228,6 +228,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
 
     deleted_found = []
     updated       = 0
+    updated_list  = []  # track who was updated for the report
     now           = int(time.time())
 
     checked = 0
@@ -265,6 +266,10 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
                     ''', (new_first, new_last, new_user, member_id))
                     conn.commit()
                     updated += 1
+                    old_name = f"{db_first_name}".strip() or f"ID:{member_id}"
+                    new_name = f"{new_first} {new_last}".strip()
+                    new_at   = f"@{new_user}" if new_user else "(no username)"
+                    updated_list.append(f"  {old_name} → {new_name} {new_at}")
                     log(f"Updated: ID {member_id} → {new_first} {new_last} (@{new_user})")
 
         except Exception as e:
@@ -292,11 +297,19 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
     if not ban:
         # Report only — list what would be banned
         ids = '\n'.join([f"  ID: {mid} (@{uname})" if uname else f"  ID: {mid}" for mid, uname in deleted_found])
-        msg = (f"✅ Cross-check complete (report only).\n"
-               f"Checked: {len(missing)} missing members\n"
-               f"Names updated: {updated}\n"
-               f"Would ban: {len(deleted_found)} deleted/banned account(s):\n{ids}\n\n"
-               f"Use 'Cross-check & Ban' to actually ban them.")
+    if updated_list:
+        updates_text = '\n'.join(updated_list)
+        if len(updates_text) > 2000:
+            updates_text = updates_text[:2000] + f'\n  ... and {len(updated_list)} more'
+        updates_section = '\n\nNames updated in DB:\n' + updates_text
+    else:
+        updates_section = ''
+    msg = (f"✅ Cross-check complete (report only).\n"
+           f"Checked: {len(missing)} missing members\n"
+           f"Names updated: {updated}\n"
+           f"Would ban: {len(deleted_found)} deleted/banned account(s):\n{ids}"
+           f"{updates_section}\n\n"
+           f"Use 'Cross-check & Ban' to actually ban them.")
         log(msg)
         send_with_menu(admin_id, msg)
         conn.close()
@@ -334,11 +347,19 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
 
     conn.close()
 
+    if updated_list:
+        updates_text = '\n'.join(updated_list)
+        if len(updates_text) > 2000:
+            updates_text = updates_text[:2000] + f'\n  ... and more'
+        updates_section = '\n\nNames updated in DB:\n' + updates_text
+    else:
+        updates_section = ''
     msg = (f"✅ Cross-check & ban complete.\n"
            f"Checked: {len(missing)} missing members\n"
            f"Names updated: {updated}\n"
            f"Banned: {banned} deleted/banned accounts\n"
-           f"Failed: {failed}")
+           f"Failed: {failed}"
+           f"{updates_section}")
     log(msg)
     send_with_menu(admin_id, msg)
 
