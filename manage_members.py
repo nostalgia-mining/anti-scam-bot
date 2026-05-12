@@ -361,6 +361,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
     send_with_menu(admin_id, msg)
 
 # ── Scan ──────────────────────────────────────────────────────────────────────
+async def cmd_scan(admin_id: int):
     send(admin_id, "🔍 Scanning group for deleted accounts...\nThis may take several minutes.")
     log("Starting scan...")
 
