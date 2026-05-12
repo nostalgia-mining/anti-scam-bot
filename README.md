@@ -1,91 +1,134 @@
-## Zenchain Telegram Anti-Phishing Admin Bot
+# nostalgia Anti-Scam Bot for Telegram
 
-Zenchain Telegram Anti-Phishing Admin Bot allows automatic monitoring of [Telegram](https://telegram.org) group members and banning members impersonating group administrators. Telegram Bot Monitor retrieves a list of group administrators automatically from the group and checks against a list of group members. If the Bot identifies a member as the one impersonating administrator, it will automatically ban the member. In addition, the Bot also has features which can be toggled to remove, warn and ban usage of images, links, crypto wallet addresses/keys, and inappropriate language.
-Follow instructions below to deploy the Bot Monitor to Telegram group.
+A Telegram group moderation bot focused on detecting and banning admin impersonators (scammers), with additional content moderation features.
 
-### Creating Group Bot
+> Based on [zenchain's telegram-bot-monitor](https://github.com/zenchain-protocol/telegram-bot-monitor), significantly extended and refactored.
 
-To create a Bot that will be assigned to group for active monitoring, use Telegram's BotFather as described below:
+---
 
-1.	After logging to your Telegram account, call BotFather on the following link:
+## Features
 
-	https://telegram.me/botfather
+- **Admin impersonation detection** — detects users whose name matches an admin's name and bans them automatically
+- **Unicode-aware name normalization** — handles lookalike characters, zero-width spaces, and Cyrillic tricks
+- **Content moderation** — configurable rules for bad words, URLs, wallet addresses, images, audio, video
+- **Warning system** — configurable number of warnings before a ban
+- **Permanent bans** — all bans are permanent (not temporary kicks)
+- **Member management** — export/import member list, cross-check for deleted/banned accounts
+- **Impersonator report** — `/report@botname` command shows last 10 banned impersonators in group chat
+- **Network resilience** — auto-restart after network disconnection
+- **Daily log rotation** — logs rotate daily with 7-day retention and automatic archiving
+- **Telegram config menu** — all settings configurable via inline keyboard in private chat with the bot
 
-2.	Click the button �Open in Web�
+---
 
-3.	Type command /start
+## Requirements
 
-4.	Type command /newbot to create new Bot
+- Node.js 14+
+- Python 3.10+ (for member management scripts)
+- SQLite3
+- A Telegram bot token (from [@BotFather](https://t.me/BotFather))
+- Telethon API credentials (from [my.telegram.org](https://my.telegram.org)) — for member management features
 
-5.	Enter the name of your new Bot, e.g. MyGroupBot
+---
 
-6.	Enter the username for your new Bot (it must end with the word bot), e.g. MyGroupBotTestbot
+## Setup
 
-7.	You will receive a Bot token used to access the Telegram Bot API
+1. **Clone the repo**
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/nostalgia-anti-scam-bot.git
+   cd nostalgia-anti-scam-bot
+   ```
 
-8.	To allow the Bot to receive messages from your group, Privacy mode of the Bot needs to be disabled. To disable it, execute following commands/actions:
+2. **Install Node dependencies**
+   ```bash
+   npm install
+   ```
 
-	a.	type /mybots
+3. **Install Python dependencies**
+   ```bash
+   pip3 install telethon requests
+   ```
 
-	b.	click on the Bot MyGroupBotTestbot
+4. **Configure the bot**
+   ```bash
+   cp src/environments/environment.ts.dist src/environments/environment.ts
+   ```
+   Edit `src/environments/environment.ts` and set:
+   - `botToken` — your bot token from BotFather
+   - `chatId` — your group's chat ID (negative number for supergroups)
 
-	c.	click on Bot Settings
+5. **Set up the database**
+   ```bash
+   sqlite3 zenchain_bot_sqlite.db < db/bot_db_sqlite.sql
+   ```
 
-	d.	click on Group Privacy
+6. **Run the bot**
+   ```bash
+   chmod +x start.sh
+   ./start.sh
+   ```
 
-	e.	click Turn off
+---
 
-	Note: Privacy mode needs to be disabled before adding Bot to the group.
-	
-9.	Click on the link of your Bot displayed in the message from the BotFather above (t.me/MyGroupBotTestbot) and click the button Start
+## Configuration
 
+All settings can be changed via the bot's inline config menu. Send `menu` to the bot in a private chat to access it.
 
-### Assign the Bot to Telegram Group
+Available settings:
+- Enable/disable each moderation rule
+- Set number of warnings before ban
+- Set custom reply messages
+- Manage banned words
+- Configure Telethon API credentials for member management
 
-To allow the Bot to monitor group members Bot needs to be assigned to your group as administrator. To assign Bot to your group, please follow the instructions below:
+---
 
-1.	While in the group, click on the group name in the header
+## Member Management
 
-2.	Click the button Add member and enter the name of your Bot. Select the Bot from the list and click Next.
+The bot includes Python scripts for bulk member operations:
 
+- **Export** — fetch all group members via Telethon
+- **Import** — import exported members into the local DB
+- **Scan** — scan for deleted accounts (Telethon)
+- **Scan & Ban** — scan and ban deleted accounts
+- **Cross-check (report)** — compare DB vs export, identify missing members via Bot API
+- **Cross-check & Ban** — same as above but also bans confirmed deleted/banned accounts
 
-### Download and install service
+Access these via the **Member Management** button in the config menu.
 
-To run the service, you first need to download the source code, install dependencies and configure the service. You need to have node.js and npm installed on your computer or server. 
+---
 
-1.	Download or clone the code
+## Running as a Service
 
-2.	Run in root folder
+To run the bot automatically on system startup:
 
-	```
-	npm install
-	```
+```ini
+# /etc/systemd/system/telegram-bot.service
+[Unit]
+Description=Telegram Anti-Scam Bot
+After=network.target
 
-Service can work with SQLite and MySQL databases. SQLite database file is provided and enabled by default. No additional software is required to use SQLite database. Should you like to use mysql database instead, you need to install MySQL server and proceed with step 3. Otherwise, proceed with step 4. 
-	
-3.	Create database user, database and import database schema from file bot_db_mysql.sql located in folder db. Grant all permissions on created database to created database user. 
+[Service]
+Type=simple
+User=YOUR_USERNAME
+WorkingDirectory=/path/to/nostalgia-anti-scam-bot
+ExecStart=/bin/bash /path/to/nostalgia-anti-scam-bot/start.sh
+Restart=on-failure
+RestartSec=10
 
-4.	Copy configuration file environment.ts.dist as environment.ts located in src/environments folder and set following parameters:
+[Install]
+WantedBy=multi-user.target
+```
 
-	a.	If selected database is SQLite, skip this step. If it is MySQL,uUpdate database connection details by entering database host, port, name, username and password and set useDatabase to mysql
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable telegram-bot
+sudo systemctl start telegram-bot
+```
 
-	b.	Enter Bot token obtained in step #7 or Creating Group Bot
+---
 
-	c.	Enter Chat Id of the group you want to monitor. To retrieve Chat Id, do the following:
+## Credits
 
-		i.	send one message to your group as the owner of the group
-
-		ii.	call the url below in the browser:
-
-				https://api.telegram.org/bot<botToken>/getUpdates 
-
-		Note: Replace <botToken> with your Bot token obtained in step #7 or Creating Group Bot
-
-		iii.	You will find Chat Id within parameter chat.id
-		
-5.	Start the service by running the command in the root folder:
-
-	```
-	node node_modules/ts-node/dist/bin.js src/bot.ts
-	```
-
+- Original project: [zenchain-protocol/telegram-bot-monitor](https://github.com/zenchain-protocol/telegram-bot-monitor)
+- Extended and maintained by: nostalgia

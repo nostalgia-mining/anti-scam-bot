@@ -1,8 +1,8 @@
 {
   "name": "telegram-bot-monitor",
-  "description": "Telegram Bot Monitor",
-  "version": "0.0.1",
-  "author": "Zenchain",
+  "description": "Telegram Anti-Scam Bot",
+  "version": "0.1.1",
+  "author": "nostalgia",
   "private": true,
   "scripts": {
     "start": "node node_modules/ts-node/dist/bin.js src/bot.ts"

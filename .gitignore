@@ -1,4 +1,42 @@
-node_modules/*
-logs/*
+node_modules/
+logs/
+out/
+
+# Environment config — contains bot token and chat ID
 src/environments/environment.ts
+
+# SQLite database
+*.db
+
+# Telethon session and config
+*.session
+telethon_config.json
+
+# Member management files
+members.json
+pending_operation.json
+
+# Log files
+*.log
+adminlist.log
+
+# Backup files — kept locally but not in repo
+src/bot-processor/*.og
+src/bot-processor/*.new
+src/bot-processor/*.new4
+src/bot-processor/*.new5
+src/bot-processor/*.new6
+src/bot-processor/*.new7
+src/bot-processor/*.new8
+src/bot-processor/*.new9
+src/bot-processor/*.kiro*
+src/bot-processor/*.bak
+src/bot-processor/*.ts.bak
+src/bot-processor/*.corrupted
+src/bot-processor/*chatgpt*
+src/*.kiro*
+*.kiro*
+package.json.kiro*
+
+# Temp
 temp/
