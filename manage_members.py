@@ -228,6 +228,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
 
     deleted_found = []
     updated       = 0
+    marked_inactive = 0
     updated_list  = []  # track who was updated for the log
     now           = int(time.time())
 
@@ -244,8 +245,11 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
             data = resp.json()
 
             if not data.get('ok'):
-                # Bot API can't find them — could be privacy settings or deleted, skip
-                log(f"Cannot verify ID {member_id} (@{db_username}) — skipping (Bot API error: {data.get('description', 'unknown')})")
+                # Bot API can't find them — they left or were removed, mark as inactive
+                cursor.execute("UPDATE chatMembers SET status = 'inactive' WHERE chatMemberId = ?", (member_id,))
+                conn.commit()
+                marked_inactive += 1
+                log(f"Marked inactive (not in group): ID {member_id} (@{db_username})")
             else:
                 result    = data['result']
                 new_first = result.get('first_name', '')
@@ -280,8 +284,8 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
     if updated_list:
         log("Names updated in DB:\n" + '\n'.join(updated_list))
 
-    if not deleted_found and updated == 0:
-        msg = f"✅ Cross-check complete.\nChecked {len(missing)} missing members — all still active, no deleted accounts found."
+    if not deleted_found and updated == 0 and marked_inactive == 0:
+        msg = f"✅ Cross-check complete.\nChecked {len(missing)} missing members — all still active, no changes needed."
         log(msg)
         send_with_menu(admin_id, msg)
         conn.close()
@@ -291,6 +295,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
         msg = (f"✅ Cross-check complete.\n"
                f"Checked: {len(missing)} missing members\n"
                f"Names updated: {updated} (see bot log for details)\n"
+               f"Marked inactive (left/removed): {marked_inactive}\n"
                f"Deleted/banned: 0")
         log(msg)
         send_with_menu(admin_id, msg)
@@ -303,6 +308,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
         msg = (f"✅ Cross-check complete (report only).\n"
                f"Checked: {len(missing)} missing members\n"
                f"Names updated: {updated} (see bot log for details)\n"
+               f"Marked inactive (left/removed): {marked_inactive}\n"
                f"Would ban: {len(deleted_found)} deleted/banned account(s):\n{ids}\n\n"
                f"Use 'Cross-check & Ban' to actually ban them.")
         log(msg)
@@ -346,6 +352,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
     msg = (f"✅ Cross-check & ban complete.\n"
            f"Checked: {len(missing)} missing members\n"
            f"Names updated: {updated} (see bot log for details)\n"
+           f"Marked inactive (left/removed): {marked_inactive}\n"
            f"Banned: {banned} deleted/banned accounts\n"
            f"Failed: {failed}")
     log(msg)
