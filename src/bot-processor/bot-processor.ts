@@ -1437,25 +1437,14 @@ export class BotProcessor {
                 this.log('Admin ' + this.adminName(adminId) + ' triggered member management: ' + command)
                 const fs = require('fs')
                 const path = require('path')
-                const today = new Date().toISOString().slice(0, 10)
-                const logPath = path.join(__dirname, '../../logs/bot-' + today + '.log')
-                const logStream = fs.openSync(logPath, 'a')
                 const proc = spawn('python3', ['-u', scriptPath, command, String(adminId), botToken], {
                     cwd: path.join(__dirname, '../..'),
                     detached: true,
                     stdio: ['ignore', 'pipe', 'pipe']
                 })
-                // Write output to both console (stdout) and log file
-                proc.stdout.on('data', (data) => {
-                    const text = data.toString()
-                    process.stdout.write(text)
-                    fs.appendFileSync(logPath, text)
-                })
-                proc.stderr.on('data', (data) => {
-                    const text = data.toString()
-                    process.stderr.write(text)
-                    fs.appendFileSync(logPath, text)
-                })
+                // Write output to console only — rotate_and_log in start.sh handles the log file
+                proc.stdout.on('data', (data) => { process.stdout.write(data.toString()) })
+                proc.stderr.on('data', (data) => { process.stderr.write(data.toString()) })
                 proc.unref()
             }
         }

@@ -86,7 +86,18 @@ def send_with_menu(chat_id: int, text: str):
 def log(text: str):
     """Print to console with timestamp."""
     ts = time.strftime("[%d/%m/%Y, %H:%M:%S]")
-    print(f"{ts} {text}")
+    print(f"{ts} {text}", flush=True)
+
+def log_verbose(text: str):
+    """Write to log file only — not shown in console."""
+    ts = time.strftime("[%d/%m/%Y, %H:%M:%S]")
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+    log_file = os.path.join(log_dir, f"bot-{time.strftime('%Y-%m-%d')}.log")
+    try:
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(f"{ts} {text}\n")
+    except Exception:
+        pass  # silently ignore if log file not accessible
 
 # ── Export ────────────────────────────────────────────────────────────────────
 async def cmd_export(admin_id: int):
@@ -249,7 +260,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
                 cursor.execute("UPDATE chatMembers SET status = 'inactive' WHERE chatMemberId = ?", (member_id,))
                 conn.commit()
                 marked_inactive += 1
-                log(f"Marked inactive (not in group): ID {member_id} (@{db_username})")
+                log_verbose(f"Marked inactive (not in group): ID {member_id} (@{db_username})")
             else:
                 result    = data['result']
                 new_first = result.get('first_name', '')
@@ -273,16 +284,16 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
                     new_name = f"{new_first} {new_last}".strip()
                     new_at   = f"@{new_user}" if new_user else "(no username)"
                     updated_list.append(f"  {old_name} → {new_name} {new_at}")
-                    log(f"Updated: ID {member_id} → {new_first} {new_last} (@{new_user})")
+                    log_verbose(f"Updated: ID {member_id} → {new_first} {new_last} (@{new_user})")
 
         except Exception as e:
             log(f"Error checking ID {member_id}: {e}")
 
         await asyncio.sleep(0.05)  # 20 calls/second
 
-    # Log full update list to console/log file
+    # Log full update list to log file only (not console)
     if updated_list:
-        log("Names updated in DB:\n" + '\n'.join(updated_list))
+        log_verbose("Names updated in DB:\n" + '\n'.join(updated_list))
 
     if not deleted_found and updated == 0 and marked_inactive == 0:
         msg = f"✅ Cross-check complete.\nChecked {len(missing)} missing members — all still active, no changes needed."
