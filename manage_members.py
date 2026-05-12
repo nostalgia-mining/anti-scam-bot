@@ -199,8 +199,8 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
     1. Loads members.json (run export first)
     2. Finds DB active members missing from the export
     3. Calls Bot API getChat on each missing member
-    4. If first_name is empty → deleted/banned → ban them
-    5. If first_name is not empty → update their name/username in DB (they just missed the export)
+    4. If first_name is empty → deleted/banned → ban them (if ban=True)
+    5. If first_name is not empty → update their name/username in DB
     """
     if not os.path.exists(JSON_PATH):
         send(admin_id, "❌ members.json not found. Run Export first.")
@@ -228,7 +228,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
 
     deleted_found = []
     updated       = 0
-    updated_list  = []  # track who was updated for the report
+    updated_list  = []  # track who was updated for the log
     now           = int(time.time())
 
     checked = 0
@@ -244,8 +244,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
             data = resp.json()
 
             if not data.get('ok'):
-                # Bot API can't find them — could be privacy settings or deleted
-                # Don't ban on ambiguous errors — skip and log
+                # Bot API can't find them — could be privacy settings or deleted, skip
                 log(f"Cannot verify ID {member_id} (@{db_username}) — skipping (Bot API error: {data.get('description', 'unknown')})")
             else:
                 result    = data['result']
@@ -275,7 +274,11 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
         except Exception as e:
             log(f"Error checking ID {member_id}: {e}")
 
-        await asyncio.sleep(0.05)  # 20 calls/second — bot is stopped during crosscheck so no competing traffic
+        await asyncio.sleep(0.05)  # 20 calls/second
+
+    # Log full update list to console/log file
+    if updated_list:
+        log("Names updated in DB:\n" + '\n'.join(updated_list))
 
     if not deleted_found and updated == 0:
         msg = f"✅ Cross-check complete.\nChecked {len(missing)} missing members — all still active, no deleted accounts found."
@@ -287,7 +290,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
     if not deleted_found:
         msg = (f"✅ Cross-check complete.\n"
                f"Checked: {len(missing)} missing members\n"
-               f"Updated names: {updated}\n"
+               f"Names updated: {updated} (see bot log for details)\n"
                f"Deleted/banned: 0")
         log(msg)
         send_with_menu(admin_id, msg)
@@ -295,21 +298,13 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
         return
 
     if not ban:
-        # Report only — list what would be banned
+        # Report only — simple summary to Telegram, full detail in log
         ids = '\n'.join([f"  ID: {mid} (@{uname})" if uname else f"  ID: {mid}" for mid, uname in deleted_found])
-    if updated_list:
-        updates_text = '\n'.join(updated_list)
-        if len(updates_text) > 2000:
-            updates_text = updates_text[:2000] + f'\n  ... and {len(updated_list)} more'
-        updates_section = '\n\nNames updated in DB:\n' + updates_text
-    else:
-        updates_section = ''
-    msg = (f"✅ Cross-check complete (report only).\n"
-           f"Checked: {len(missing)} missing members\n"
-           f"Names updated: {updated}\n"
-           f"Would ban: {len(deleted_found)} deleted/banned account(s):\n{ids}"
-           f"{updates_section}\n\n"
-           f"Use 'Cross-check & Ban' to actually ban them.")
+        msg = (f"✅ Cross-check complete (report only).\n"
+               f"Checked: {len(missing)} missing members\n"
+               f"Names updated: {updated} (see bot log for details)\n"
+               f"Would ban: {len(deleted_found)} deleted/banned account(s):\n{ids}\n\n"
+               f"Use 'Cross-check & Ban' to actually ban them.")
         log(msg)
         send_with_menu(admin_id, msg)
         conn.close()
@@ -347,19 +342,11 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
 
     conn.close()
 
-    if updated_list:
-        updates_text = '\n'.join(updated_list)
-        if len(updates_text) > 2000:
-            updates_text = updates_text[:2000] + f'\n  ... and more'
-        updates_section = '\n\nNames updated in DB:\n' + updates_text
-    else:
-        updates_section = ''
     msg = (f"✅ Cross-check & ban complete.\n"
            f"Checked: {len(missing)} missing members\n"
-           f"Names updated: {updated}\n"
+           f"Names updated: {updated} (see bot log for details)\n"
            f"Banned: {banned} deleted/banned accounts\n"
-           f"Failed: {failed}"
-           f"{updates_section}")
+           f"Failed: {failed}")
     log(msg)
     send_with_menu(admin_id, msg)
 
