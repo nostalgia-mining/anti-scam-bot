@@ -1,7 +1,7 @@
 {
   "name": "telegram-bot-monitor",
   "description": "Telegram Anti-Scam Bot",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "author": "nostalgia",
   "private": true,
   "scripts": {

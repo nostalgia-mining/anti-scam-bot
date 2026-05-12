@@ -196,9 +196,9 @@ export class BotProcessor {
     }
 
     private buildImpersonatorReport(records: any[]): string {
-        if (!records || records.length === 0) return '📋 No banned impersonators on record yet.'
+        if (!records || records.length === 0) return '[ No banned impersonators on record yet. ]'
 
-        const lines = ['🚫 Last 10 banned impersonators:\n']
+        const lines = ['=== Last 10 banned impersonators ===\n']
         records.forEach((r, i) => {
             const identifier = r.chatMemberUserName ? `@${r.chatMemberUserName}` : `(no username)`
             // banDate can be a Unix timestamp (number), a date string, or zero/null
