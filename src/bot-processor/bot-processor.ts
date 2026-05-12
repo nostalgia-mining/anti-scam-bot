@@ -1439,7 +1439,18 @@ export class BotProcessor {
                 const proc = spawn('python3', [scriptPath, command, String(adminId), botToken], {
                     cwd: path.join(__dirname, '../..'),
                     detached: true,
-                    stdio: ['ignore', logStream, logStream]
+                    stdio: ['ignore', 'pipe', 'pipe']
+                })
+                // Write output to both console (stdout) and log file
+                proc.stdout.on('data', (data) => {
+                    const text = data.toString()
+                    process.stdout.write(text)
+                    fs.appendFileSync(logPath, text)
+                })
+                proc.stderr.on('data', (data) => {
+                    const text = data.toString()
+                    process.stderr.write(text)
+                    fs.appendFileSync(logPath, text)
                 })
                 proc.unref()
             }
