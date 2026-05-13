@@ -37,6 +37,7 @@ DB_PATH   = 'zenchain_bot_sqlite.db'
 JSON_PATH = 'members.json'
 SESSION   = 'member_export_session'  # reuse existing session file
 CONFIG_FILE = 'telethon_config.json'
+EXCLUDE_FILE = 'crosscheck_exclude.json'  # members confirmed active but missing from export
 # ─────────────────────────────────────────────────────────────────────────────
 
 def load_telethon_config():
@@ -98,6 +99,24 @@ def log_verbose(text: str):
             f.write(f"{ts} {text}\n")
     except Exception:
         pass  # silently ignore if log file not accessible
+
+def load_exclude_list() -> set:
+    """Load the set of member IDs to skip in crosscheck (confirmed active, just missing from export)."""
+    if not os.path.exists(EXCLUDE_FILE):
+        return set()
+    try:
+        with open(EXCLUDE_FILE, 'r') as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
+
+def save_exclude_list(exclude: set):
+    """Save the exclude list to disk."""
+    try:
+        with open(EXCLUDE_FILE, 'w') as f:
+            json.dump(list(exclude), f)
+    except Exception as e:
+        log(f"Warning: could not save exclude list: {e}")
 
 # ── Export ────────────────────────────────────────────────────────────────────
 async def cmd_export(admin_id: int):
@@ -234,8 +253,13 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
     # Find members in DB but not in export
     missing = [(mid, fname, uname) for (mid, fname, uname) in db_members if mid not in export_ids]
 
-    log(f"DB active members: {len(db_members)}, in export: {len(export_ids)}, missing from export: {len(missing)}")
-    send(admin_id, f"⏳ Found {len(missing)} members in DB not in export. Verifying via Bot API...")
+    # Load exclusion list — members confirmed active but consistently missing from export
+    exclude = load_exclude_list()
+    skipped_excluded = len([m for m in missing if m[0] in exclude])
+    missing = [(mid, fname, uname) for (mid, fname, uname) in missing if mid not in exclude]
+
+    log(f"DB active members: {len(db_members)}, in export: {len(export_ids)}, missing: {len(missing) + skipped_excluded} ({skipped_excluded} skipped — known privacy accounts)")
+    send(admin_id, f"⏳ Found {len(missing)} members to verify (skipped {skipped_excluded} known privacy accounts). Verifying via Bot API...")
 
     deleted_found = []
     updated       = 0
@@ -260,6 +284,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
                 cursor.execute("UPDATE chatMembers SET status = 'inactive' WHERE chatMemberId = ?", (member_id,))
                 conn.commit()
                 marked_inactive += 1
+                exclude.discard(member_id)  # remove from exclude list if they left
                 log_verbose(f"Marked inactive (not in group): ID {member_id} (@{db_username})")
             else:
                 result    = data['result']
@@ -270,6 +295,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
                 if not new_first:
                     # Empty first_name = deleted/banned account
                     deleted_found.append((member_id, new_user or db_username or ''))
+                    exclude.discard(member_id)  # remove from exclude list
                     log(f"Deleted/banned account: ID {member_id} (@{new_user or db_username})")
                 else:
                     # Still active — update their name/username in DB only if changed
@@ -287,6 +313,8 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
                         new_at   = f"@{new_user}" if new_user else "(no username)"
                         updated_list.append(f"  {old_name} → {new_name} {new_at}")
                         log_verbose(f"Updated: ID {member_id} → {new_first} {new_last} (@{new_user})")
+                    # Add to exclude list — confirmed active, just missing from export due to privacy
+                    exclude.add(member_id)
 
         except Exception as e:
             log(f"Error checking ID {member_id}: {e}")
@@ -296,6 +324,10 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
     # Log full update list to log file only (not console)
     if updated_list:
         log_verbose("Names updated in DB:\n" + '\n'.join(updated_list))
+
+    # Save updated exclude list
+    save_exclude_list(exclude)
+    log_verbose(f"Exclude list updated: {len(exclude)} members")
 
     if not deleted_found and updated == 0 and marked_inactive == 0:
         msg = f"✅ Cross-check complete.\nChecked {len(missing)} missing members — all still active, no changes needed."

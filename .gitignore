@@ -15,6 +15,7 @@ telethon_config.json
 # Member management files
 members.json
 pending_operation.json
+crosscheck_exclude.json
 
 # Log files
 *.log
