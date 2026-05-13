@@ -246,7 +246,7 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
     checked = 0
     for (member_id, db_first_name, db_username) in missing:
         checked += 1
-        if checked % 50 == 0:
+        if checked % 10 == 0:
             log(f"Cross-check progress: {checked}/{len(missing)}...")
             send(admin_id, f"⏳ Checked {checked}/{len(missing)} members...")
 
