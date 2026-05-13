@@ -1456,8 +1456,7 @@ export class BotProcessor {
 
         this.botApiProcessor.action('mmImport', async (ctx) => {
             if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
-            // Stop bot, run import, restart
-            spawnMemberScript('import', ctx.update.callback_query.from.id, ctx, true)
+            spawnMemberScript('import', ctx.update.callback_query.from.id, ctx, false)
         })
 
         this.botApiProcessor.action('mmScan', async (ctx) => {
@@ -1467,8 +1466,7 @@ export class BotProcessor {
 
         this.botApiProcessor.action('mmCleanup', async (ctx) => {
             if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
-            // Stop bot, run cleanup, restart
-            spawnMemberScript('cleanup', ctx.update.callback_query.from.id, ctx, true)
+            spawnMemberScript('cleanup', ctx.update.callback_query.from.id, ctx, false)
         })
 
         this.botApiProcessor.action('mmCrosscheckDry', async (ctx) => {
@@ -1479,8 +1477,7 @@ export class BotProcessor {
 
         this.botApiProcessor.action('mmCrosscheck', async (ctx) => {
             if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
-            // Stop bot, run crosscheck with bans, restart
-            spawnMemberScript('crosscheck', ctx.update.callback_query.from.id, ctx, true)
+            spawnMemberScript('crosscheck', ctx.update.callback_query.from.id, ctx, false)
         })
     }
 
@@ -1494,6 +1491,9 @@ export class BotProcessor {
 			connectionOptions.entities = [ChatMember, MemberHistory]
 
 			this.dbConnection = await createConnection(connectionOptions)
+
+			// Enable WAL mode for safer concurrent access with Python scripts
+			await this.dbConnection.query('PRAGMA journal_mode=WAL;')
 
 			this.botMessage.displayMessage("Successfully connected to database")
 
