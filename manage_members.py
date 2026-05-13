@@ -272,19 +272,21 @@ async def cmd_crosscheck(admin_id: int, ban: bool = False):
                     deleted_found.append((member_id, new_user or db_username or ''))
                     log(f"Deleted/banned account: ID {member_id} (@{new_user or db_username})")
                 else:
-                    # Still active — update their name/username in DB
-                    cursor.execute('''
-                        UPDATE chatMembers
-                        SET chatMemberFirstName = ?, chatMemberLastName = ?, chatMemberUserName = ?
-                        WHERE chatMemberId = ?
-                    ''', (new_first, new_last, new_user, member_id))
-                    conn.commit()
-                    updated += 1
-                    old_name = f"{db_first_name}".strip() or f"ID:{member_id}"
-                    new_name = f"{new_first} {new_last}".strip()
-                    new_at   = f"@{new_user}" if new_user else "(no username)"
-                    updated_list.append(f"  {old_name} → {new_name} {new_at}")
-                    log_verbose(f"Updated: ID {member_id} → {new_first} {new_last} (@{new_user})")
+                    # Still active — update their name/username in DB only if changed
+                    if (new_first != db_first_name or
+                        new_user != (db_username or '')):
+                        cursor.execute('''
+                            UPDATE chatMembers
+                            SET chatMemberFirstName = ?, chatMemberLastName = ?, chatMemberUserName = ?
+                            WHERE chatMemberId = ?
+                        ''', (new_first, new_last, new_user, member_id))
+                        conn.commit()
+                        updated += 1
+                        old_name = f"{db_first_name}".strip() or f"ID:{member_id}"
+                        new_name = f"{new_first} {new_last}".strip()
+                        new_at   = f"@{new_user}" if new_user else "(no username)"
+                        updated_list.append(f"  {old_name} → {new_name} {new_at}")
+                        log_verbose(f"Updated: ID {member_id} → {new_first} {new_last} (@{new_user})")
 
         except Exception as e:
             log(f"Error checking ID {member_id}: {e}")
