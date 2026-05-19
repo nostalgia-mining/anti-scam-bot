@@ -8,9 +8,12 @@ export class BotConfigurator {
     
     constructor() {
         this.configuration = environment;
-        this.configuration.validChars = /[^\x20-\x7E]+/g        
-        this.botMessage = new BotMessage()     
-    } 
+        this.configuration.validChars = /[^\x20-\x7E]+/g
+        if (!Array.isArray(this.configuration.nameBlacklist)) {
+            this.configuration.nameBlacklist = []
+        }
+        this.botMessage = new BotMessage()
+    }
 
     public getConfiguration() {
         return this.configuration
@@ -86,7 +89,7 @@ export class BotConfigurator {
     }
     
 
-    private processBadWords(ruleAction, messageRules) {
+    public processBadWords(ruleAction, messageRules) {
         this.botMessage.displayMessage(`Process Banned Words Configuration Message, Rules: ${ruleAction} ${messageRules}`)
 
         let ruleWords = this.configuration.badWords.toString().replace("(", "").replace(")", "").split("|") 
@@ -125,7 +128,7 @@ export class BotConfigurator {
     }
     
     
-    private processReplyMessage(messageType, messageContent) {
+    public processReplyMessage(messageType, messageContent) {
         this.botMessage.displayMessage(`Process Reply Message Configuration Message, Rules: ${messageType}, ${messageContent}`)
         
         this.configuration.replyMessages[messageType.replace("ReplyMessage", "")] = messageContent
@@ -133,6 +136,30 @@ export class BotConfigurator {
         this.botMessage.displayMessage(`Process Reply Message ${messageType} Rule updated to: ${messageContent}`)
 
         this.writeConfiguration(this.configuration)
+    }
+
+    public processNameBlacklist(action: 'add' | 'remove', word: string): string {
+        const normalized = word.trim().toLowerCase()
+        if (!normalized) return 'Invalid word.'
+
+        const list: string[] = Array.isArray(this.configuration.nameBlacklist)
+            ? this.configuration.nameBlacklist
+            : []
+
+        if (action === 'add') {
+            if (list.includes(normalized)) return `"${normalized}" is already in the blacklist.`
+            list.push(normalized)
+            this.configuration.nameBlacklist = list
+            this.writeConfiguration(this.configuration)
+            return `"${normalized}" added to name blacklist.`
+        } else {
+            const idx = list.indexOf(normalized)
+            if (idx === -1) return `"${normalized}" was not found in the blacklist.`
+            list.splice(idx, 1)
+            this.configuration.nameBlacklist = list
+            this.writeConfiguration(this.configuration)
+            return `"${normalized}" removed from name blacklist.`
+        }
     }
 
     private writeConfiguration(configuration){

@@ -401,6 +401,14 @@ export class BotProcessor {
 
                     let ruleWords = this.botConfigurator.getConfiguration().badWords.toString().replace("(", "").replace(")", "").split("|").join(", ")
                     ctx.reply(`Banned Word/Phrase(s) are set to ${ruleWords}`)
+                } else if (this.lastConfigRule == "nameBlacklistAdd") {
+                    this.lastConfigRule = ''
+                    const result = this.botConfigurator.processNameBlacklist('add', message.text)
+                    ctx.reply(result)
+                } else if (this.lastConfigRule == "nameBlacklistRemove") {
+                    this.lastConfigRule = ''
+                    const result = this.botConfigurator.processNameBlacklist('remove', message.text)
+                    ctx.reply(result)
                 } else if (this.lastConfigRule == "mmApiId") {
                     const apiId = parseInt(message.text.trim())
                     if (isNaN(apiId) || apiId <= 0) {
@@ -677,7 +685,7 @@ export class BotProcessor {
         if (this.checkingMembers.has(member.chatMemberId)) return
         this.checkingMembers.add(member.chatMemberId)
 
-        this.botApiProcessor.telegram.getChat(member.chatMemberId).then(details => {
+        this.botApiProcessor.telegram.getChat(member.chatMemberId).then(async details => {
 
             // Skip if this user is a known admin
             if (this.chatAdmins.some(admin => admin.id == details.id)) {
@@ -728,6 +736,17 @@ export class BotProcessor {
                 this.banOrWarnMember(banMemberData, 'Admin')
             }
 
+            // Check name against blacklist (only if not already caught as impersonator)
+            if (impersonatedAdmin === null) {
+                const matchedKeyword = this.nameMatchesBlacklist(details)
+                if (matchedKeyword !== null) {
+                    const displayName = details.first_name +
+                        (details.last_name ? ' ' + details.last_name : '') +
+                        (details.username ? ' (@' + details.username + ')' : '')
+                    await this.muteMember(details.id, this.chatId, displayName, member.messageId, matchedKeyword)
+                }
+            }
+
             this.checkingMembers.delete(member.chatMemberId)
 
         }).catch((e) => {
@@ -739,7 +758,60 @@ export class BotProcessor {
         })
     }
 
-    // One-time startup scan — rate-limited to one member per 500ms
+    // Returns the matched blacklist keyword if the member's name contains a blacklisted word, null otherwise
+    private nameMatchesBlacklist(details: any): string | null {
+        const blacklist: string[] = Array.isArray((this.botConfigurator.getConfiguration() as any).nameBlacklist)
+            ? (this.botConfigurator.getConfiguration() as any).nameBlacklist
+            : []
+        if (blacklist.length === 0) return null
+
+        const first = this.normalize(details.first_name)
+        const last = this.normalize(details.last_name)
+        const username = this.normalize(details.username)
+        const fullName = first + (last ? last : '')
+
+        for (const keyword of blacklist) {
+            const normalizedKeyword = this.normalize(keyword)
+            if (!normalizedKeyword) continue
+            if (fullName.includes(normalizedKeyword) || username.includes(normalizedKeyword)) {
+                return keyword
+            }
+        }
+        return null
+    }
+
+    private async muteMember(memberId: number, chatId: number, displayName: string, messageId: number | undefined, matchedKeyword: string) {
+        // Mute: remove all send permissions indefinitely
+        try {
+            await this.botApiProcessor.telegram.restrictChatMember(chatId, memberId, {
+                can_send_messages: false,
+                can_send_media_messages: false,
+                can_send_other_messages: false,
+                can_add_web_page_previews: false
+            })
+            this.log(`BLACKLISTED NAME — "${displayName}" muted for matching keyword "${matchedKeyword}"`)
+        } catch (e) {
+            this.log(`Could not mute member ${memberId}`, { message: e.message })
+        }
+
+        // Delete the triggering message if present
+        if (messageId) {
+            this.botApiProcessor.telegram.deleteMessage(chatId, messageId)
+                .then(() => this.log(`Blacklisted name message deleted (ID: ${messageId})`))
+                .catch((e) => {
+                    if (!e.message.includes('message to delete not found')) {
+                        this.log("Could not delete blacklisted name message", { message: e.message })
+                    }
+                })
+        }
+
+        // Alert in the group chat
+        const alertMsg = `⚠️ Potential scammer alert! "${displayName}" muted for using a blacklisted name.`
+        this.botApiProcessor.telegram.sendMessage(chatId, alertMsg)
+            .catch((e) => this.log("Could not send blacklist mute alert", { message: e.message }))
+    }
+
+
     // Skips members already marked as banned in the DB
     private startupMemberScan() {
         if (!this.botConfigurator.getConfiguration().rules.checkAdmin.validate) {
@@ -1036,6 +1108,9 @@ export class BotProcessor {
                     ],
                     [
                         m.callbackButton('📋 Last 10 Banned Impersonators', 'reportImpersonators')
+                    ],
+                    [
+                        m.callbackButton('🚫 Blacklisted Names', 'nameBlacklist')
                     ]
                 ]))
 
@@ -1372,6 +1447,47 @@ export class BotProcessor {
                     ctx.reply(`Current Reply Message is: ${this.botConfigurator.getConfiguration().replyMessages[replyMessage.type.replace('ReplyMessage', '')]}. \n\nEnter new Reply Message`)
                 }
             })
+        })
+
+        // ── Blacklisted Names ─────────────────────────────────────────────────
+        this.botApiProcessor.action('nameBlacklist', (ctx) => {
+            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
+            const list: string[] = Array.isArray((this.botConfigurator.getConfiguration() as any).nameBlacklist)
+                ? (this.botConfigurator.getConfiguration() as any).nameBlacklist
+                : []
+            const count = list.length
+            const nameBlacklistMenu = Extra
+                .markdown()
+                .markup((m) => m.inlineKeyboard([
+                    [m.callbackButton('➕ Add', 'nameBlacklistAdd'), m.callbackButton('➖ Remove', 'nameBlacklistRemove')],
+                    [m.callbackButton('📋 List', 'nameBlacklistList')],
+                    [m.callbackButton('Back to Main Menu', 'mainMenu')]
+                ]))
+            this.lastConfigRule = ''
+            ctx.reply(`Blacklisted Names (${count} keyword${count !== 1 ? 's' : ''})`, nameBlacklistMenu)
+        })
+
+        this.botApiProcessor.action('nameBlacklistAdd', (ctx) => {
+            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
+            this.lastConfigRule = 'nameBlacklistAdd'
+            ctx.reply('Enter the keyword to add to the name blacklist:')
+        })
+
+        this.botApiProcessor.action('nameBlacklistRemove', (ctx) => {
+            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
+            this.lastConfigRule = 'nameBlacklistRemove'
+            ctx.reply('Enter the keyword to remove from the name blacklist:')
+        })
+
+        this.botApiProcessor.action('nameBlacklistList', (ctx) => {
+            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
+            const list: string[] = Array.isArray((this.botConfigurator.getConfiguration() as any).nameBlacklist)
+                ? (this.botConfigurator.getConfiguration() as any).nameBlacklist
+                : []
+            const reply = list.length === 0
+                ? 'Name blacklist is empty.'
+                : `Current blacklisted keywords (${list.length}):\n\n${list.map((w, i) => `${i + 1}. ${w}`).join('\n')}`
+            ctx.reply(reply)
         })
 
         // ── Member Management (runs via external Python script) ──────────────

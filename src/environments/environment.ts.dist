@@ -59,6 +59,7 @@ export const environment = {
     }
   },
   "badWords": "",
+  "nameBlacklist": [],
   "urlRegex": "(http|https):",
   "walletAddress": [
     "(\\b0x[a-f0-9]{40,}\\b)",
