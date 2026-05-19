@@ -1101,6 +1101,9 @@ export class BotProcessor {
                         m.callbackButton('Set Banned Words', 'badWords')
                     ],
                     [
+                        m.callbackButton('🚫 Blacklisted Names', 'nameBlacklist')
+                    ],
+                    [
                         m.callbackButton('Set Reply Messages', 'replyMessages')
                     ],
                     [
@@ -1108,9 +1111,6 @@ export class BotProcessor {
                     ],
                     [
                         m.callbackButton('📋 Last 10 Banned Impersonators', 'reportImpersonators')
-                    ],
-                    [
-                        m.callbackButton('🚫 Blacklisted Names', 'nameBlacklist')
                     ]
                 ]))
 
