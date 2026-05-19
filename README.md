@@ -1,4 +1,4 @@
-# nostalgia Anti-Scam Bot for Telegram
+# Anti-Scam Bot for Telegram - by nostalgia
 
 A Telegram group moderation bot focused on detecting and banning admin impersonators (scammers), with additional content moderation features.
 
