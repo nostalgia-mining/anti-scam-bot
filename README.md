@@ -35,8 +35,8 @@ A Telegram group moderation bot focused on detecting and banning admin impersona
 
 1. **Clone the repo**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/nostalgia-anti-scam-bot.git
-   cd nostalgia-anti-scam-bot
+   git clone https://github.com/nostalgia-mining/anti-scam-bot.git
+   cd anti-scam-bot
    ```
 
 2. **Install Node dependencies**
@@ -56,6 +56,8 @@ A Telegram group moderation bot focused on detecting and banning admin impersona
    Edit `src/environments/environment.ts` and set:
    - `botToken` — your bot token from BotFather
    - `chatId` — your group's chat ID (negative number for supergroups)
+
+   > **Important:** `src/environments/environment.ts` is listed in `.gitignore` and will never be committed. It contains your bot token and should never be pushed to any repository. The `.dist` file is the safe placeholder kept in the repo for reference.
 
 5. **Set up the database**
    ```bash
