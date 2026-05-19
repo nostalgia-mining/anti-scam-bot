@@ -2,7 +2,7 @@
   "compilerOptions": {
     /* Basic Options */
     "target": "ES2017",                       /* Specify ECMAScript target version: 'ES3' (default), 'ES5', 'ES2015', 'ES2016', 'ES2017', or 'ESNEXT'. */
-    "lib": ["es2017"],                        /* Include ES2017 lib so Unicode regex flags (/u, /gu) are recognized. */
+    "lib": ["es2018", "es2018.regexp", "es2020.intl"],  /* es2018: Set iteration + core; es2018.regexp: Unicode regex flags; es2020.intl: hourCycle support. */
     "module": "commonjs",                     /* Specify module code generation: 'commonjs', 'amd', 'system', 'umd', 'es2015', or 'ESNext'. */
     "allowJs": false,                         /* Allow javascript files to be compiled. */
     "sourceMap": true,                        /* Generates corresponding '.map' file. */
@@ -19,6 +19,7 @@
     "experimentalDecorators": true,           /* Enables experimental support for ES7 decorators. */
     "emitDecoratorMetadata": true,            /* Enables experimental support for emitting type metadata for decorators. */
     "downlevelIteration": true,               /* Enable iteration over Set/Map/iterables when targeting ES5/ES2015. */
+    "esModuleInterop": true,                  /* Allows default imports from CommonJS modules (e.g. telegraf). */
     "typeRoots": ["node_modules/@types"]
   },
   "include": [

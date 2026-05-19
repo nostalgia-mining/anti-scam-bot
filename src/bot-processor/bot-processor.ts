@@ -1,6 +1,6 @@
 import "reflect-metadata"
 import { createConnection, Entity, Column, getManager } from "typeorm"
-import * as Telegraf from "telegraf"
+import Telegraf, { Extra } from "telegraf"
 import * as fs from "fs"
 import { BotConfigurator } from "../bot-processor/bot-configurator"
 import { BotMessage } from "../bot-processor/bot-message"
@@ -1009,7 +1009,7 @@ export class BotProcessor {
 
         let menus = []
 
-        let configurationMenu = Telegraf.Extra
+        let configurationMenu = Extra
                 .markdown()
                 .markup((m) => m.inlineKeyboard([
                     [
@@ -1037,7 +1037,7 @@ export class BotProcessor {
                     [
                         m.callbackButton('📋 Last 10 Banned Impersonators', 'reportImpersonators')
                     ]
-                ]).resize())
+                ]))
 
         this.botApiProcessor.hears(/menu/i, (ctx) => {
             if (this.isAdminMessage(ctx.message.from.id) && ctx.message.chat.id != this.chatId) {
@@ -1106,7 +1106,7 @@ export class BotProcessor {
 
         checkRules.forEach(rule => {
             if (rule.type == 'checkAdmin') {
-                menus[rule.type] = Telegraf.Extra
+                menus[rule.type] = Extra
                                     .markdown()
                                     .markup((m) => m.inlineKeyboard([
                                         [
@@ -1116,9 +1116,9 @@ export class BotProcessor {
                                         [
                                             m.callbackButton('Back to Main Menu', 'mainMenu')
                                         ]
-                                    ]).resize())
+                                    ]))
             } else {
-                menus[rule.type] = Telegraf.Extra
+                menus[rule.type] = Extra
                                     .markdown()
                                     .markup((m) => m.inlineKeyboard([
                                         [
@@ -1129,7 +1129,7 @@ export class BotProcessor {
                                             m.callbackButton('Remove Message', `${rule.type}RuleRemoveMessage`),
                                             m.callbackButton('Back to Main Menu', 'mainMenu')
                                         ]
-                                    ]).resize())
+                                    ]))
             }
             this.botApiProcessor.action(`${rule.type}`, (ctx) => {
                 if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
@@ -1151,12 +1151,12 @@ export class BotProcessor {
                         newStatus = 'Enable'
                     }
 
-                    let validateMenu = Telegraf.Extra
+                    let validateMenu = Extra
                         .markdown()
                         .markup((m) => m.inlineKeyboard([
                             [m.callbackButton(`${newStatus}`, `${rule.type}RuleValidate${newStatus}`)],
                             [m.callbackButton(`Back to ${rule.title} Menu`, `${rule.type}`)]
-                        ]).resize());
+                        ]));
 
                     this.lastConfigRule = ''
                     ctx.reply(`Setting is ${currentStatus}`, validateMenu)
@@ -1199,12 +1199,12 @@ export class BotProcessor {
                         newStatus = 'Enable'
                     }
 
-                    let removeMessageMenu = Telegraf.Extra
+                    let removeMessageMenu = Extra
                         .markdown()
                         .markup((m) => m.inlineKeyboard([
                             [m.callbackButton(`${newStatus}`, `${rule.type}RuleRemoveMessage${newStatus}`)],
                             [m.callbackButton(`Back to ${rule.title} Menu`, `${rule.type}`)]
-                        ]).resize());
+                        ]));
 
                     this.lastConfigRule = ''
                     ctx.reply(`Remove Message Setting is ${currentStatus}`, removeMessageMenu)
@@ -1244,36 +1244,36 @@ export class BotProcessor {
                     if (warnings == 0) {
                         currentStatus = 'Ban Immediately'
 
-                        banUserMenu = Telegraf.Extra
+                        banUserMenu = Extra
                             .markdown()
                             .markup((m) => m.inlineKeyboard([
                                 [m.callbackButton('Disable', `${rule.type}RuleBanUserDisable`)],
                                 [m.callbackButton('Warn before banning', `${rule.type}RuleBanUserWarn`)],
                                 [m.callbackButton(`Back to ${rule.title} Menu`, `${rule.type}`)]
-                            ]).resize());
+                            ]));
 
                     } else if (warnings == -1) {
                         currentStatus = 'Disabled'
 
-                        banUserMenu = Telegraf.Extra
+                        banUserMenu = Extra
                             .markdown()
                             .markup((m) => m.inlineKeyboard([
                                 [m.callbackButton('Ban Immediately', `${rule.type}RuleBanUserImmediately`)],
                                 [m.callbackButton('Warn before banning', `${rule.type}RuleBanUserWarn`)],
                                 [m.callbackButton(`Back to ${rule.title} Menu`, `${rule.type}`)]
-                            ]).resize());
+                            ]));
 
                     } else {
                         currentStatus = `Ban after ${warnings} warnings`
 
-                        banUserMenu = Telegraf.Extra
+                        banUserMenu = Extra
                             .markdown()
                             .markup((m) => m.inlineKeyboard([
                                 [m.callbackButton('Disable', `${rule.type}RuleBanUserDisable`)],
                                 [m.callbackButton('Ban Immediatelly', `${rule.type}RuleBanUserImmediately`)],
                                 [m.callbackButton('Warn before banning', `${rule.type}RuleBanUserWarn`)],
                                 [m.callbackButton(`Back to ${rule.title} Menu`, `${rule.type}`)]
-                            ]).resize());
+                            ]));
 
                     }
                     ctx.reply(`Ban User Setting is ${currentStatus}`, banUserMenu)
@@ -1315,13 +1315,13 @@ export class BotProcessor {
                 let currentWords = this.botConfigurator.getConfiguration().badWords
                 currentWords = currentWords.replace("(", "").replace(")", "").split("|").join(", ")
 
-                let badWordsMenu = Telegraf.Extra
+                let badWordsMenu = Extra
                     .markdown()
                     .markup((m) => m.inlineKeyboard([
                         [m.callbackButton('Add Word/Phrase', 'badWordsSetWord')],
                         [m.callbackButton('Remove Word/Phrase', 'badWordsUnsetWord')],
                         [m.callbackButton('Back to Main Menu', 'mainMenu')]
-                    ]).resize());
+                    ]));
 
                 this.lastConfigRule = ''
                 ctx.reply(`Current Banned Word/Phrase(s) are ${currentWords}`, badWordsMenu)
@@ -1348,7 +1348,7 @@ export class BotProcessor {
                 let currentWords = this.botConfigurator.getConfiguration().badWords
                 currentWords = currentWords.replace("(", "").replace(")", "").split("|").join(", ")
 
-                let replyMessagesMenu = Telegraf.Extra
+                let replyMessagesMenu = Extra
                     .markdown()
                     .markup((m) => m.inlineKeyboard([
                         [m.callbackButton('Inappropriate Content Message', 'inappropriateContentReplyMessage')],
@@ -1358,7 +1358,7 @@ export class BotProcessor {
                         [m.callbackButton('Posting Audio Message', 'audioReplyMessage')],
                         [m.callbackButton('Posting URL Message', 'urlReplyMessage')],
                         [m.callbackButton('Warning to Member', 'warningReplyMessage')]
-                    ]).resize());
+                    ]));
 
                 this.lastConfigRule = ''
                 ctx.reply("Reply Messages", replyMessagesMenu)

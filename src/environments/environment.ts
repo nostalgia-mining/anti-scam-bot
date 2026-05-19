@@ -2,16 +2,11 @@ export const environment = {
   "database": {
     "mysql": {
       "type": "mysql",
-      "hostname": "localhost",
+      "hostname": "database host",
       "port": 3306,
-      "database": "zenchain_bot",
-      "username": "zenchain_bot_user",
-      "password": "strong_password",
-      "insecureAuth": true,
-      "entities": [
-        null,
-        null
-      ]
+      "database": "database name",
+      "username": "database user",
+      "password": "database password"
     },
     "sqlite": {
       "type": "sqlite",
@@ -24,8 +19,8 @@ export const environment = {
     },
     "useDatabase": "sqlite"
   },
-  "botToken": "555584786:AAGCQHeBuid5YvkX8LBcS2ySJ7KqhEHdiIc",
-  "chatId": "-294145247",
+  "botToken": "8632885702:AAFoNM_4ABi7omYcI_Czu0xY4mlHr5qKECM",
+  "chatId": "-1001701085050",
   "checkMemberInterval": "5000",
   "rules": {
     "checkAdmin": {
@@ -35,15 +30,15 @@ export const environment = {
     "checkBadWord": {
       "validate": true,
       "removeMessage": true,
-      "banUser": "4"
+      "banUser": "1"
     },
     "checkWalletKey": {
-      "validate": true,
+      "validate": false,
       "removeMessage": true,
-      "banUser": "5"
+      "banUser": "1"
     },
     "checkAudio": {
-      "validate": true,
+      "validate": false,
       "removeMessage": false,
       "banUser": "-1"
     },
@@ -58,8 +53,8 @@ export const environment = {
       "banUser": "-1"
     },
     "checkUrl": {
-      "validate": true,
-      "removeMessage": true,
+      "validate": false,
+      "removeMessage": false,
       "banUser": "-1"
     },
     "checkAnyFile": {
@@ -68,22 +63,21 @@ export const environment = {
       "banUser": "-1"
     }
   },
-  "badWords": "(free eth|send me some eth|private key)",
+  "badWords": "( direct message|directly|privately|direct message|private message|Drop me|for assistance|message first|attend to|Reach out to me|Connect with me|Please send me|send me a dm|check it with the team|redirect your issue|to my inbox|for further assistance)",
   "urlRegex": "(http|https):",
   "walletAddress": [
     "(\\b0x[a-f0-9]{40,}\\b)",
     "(\\b[0-9a-z]{34,}\\b)"
   ],
-  "userWarnings": 2,
   "replyMessages": {
-    "inappropriateContent": "The message has been deleted because it contained inappropriate message",
+    "inappropriateContent": "/safety",
     "walletKey": "The message has been deleted because it contained Wallet address or private key",
     "image": "The message has been deleted because it contained image",
     "video": "The message has been deleted because it contained video",
     "audio": "The message has been deleted because it contained audio",
     "url": "The message has been deleted because it contained external link (url)",
-    "warning": "Do not post messages with inappropriate content, Wallet address, audio, video or image. You will be banned if you post such message again"
+    "warning": "Potential impersonator alert"
   },
-  "displayMessages": true,
+  "displayMessages": false,
   "validChars": {}
 }
