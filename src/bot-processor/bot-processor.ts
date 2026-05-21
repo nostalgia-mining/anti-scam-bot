@@ -1045,6 +1045,47 @@ export class BotProcessor {
         })
         this.botApiProcessor.on('left_chat_member', (ctx) => this.removeMember(ctx.message))
 
+        // chat_member update — fires on join, leave, ban, and NAME CHANGES
+        // even with "Hide Members" enabled. This catches impersonators who join
+        // clean then rename to match an admin.
+        this.botApiProcessor.on('chat_member', (ctx) => {
+            const update = ctx.chatMember
+            const newMember = update.new_chat_member
+            const oldMember = update.old_chat_member
+
+            // Only process if the user is currently a member (not left/banned/restricted)
+            if (newMember.status !== 'member' && newMember.status !== 'creator' && newMember.status !== 'administrator') {
+                return
+            }
+
+            // Skip admins
+            if (this.isAdminMessage(newMember.user.id)) return
+
+            const user = newMember.user
+            const displayName = user.first_name +
+                (user.last_name ? ' ' + user.last_name : '') +
+                (user.username ? ' (@' + user.username + ')' : '')
+
+            // Detect name change — old and new status are both 'member' but name differs
+            const nameChanged = oldMember.status === 'member' &&
+                (oldMember.user.first_name !== user.first_name || oldMember.user.last_name !== user.last_name)
+
+            if (nameChanged) {
+                this.log(`Name change detected: "${oldMember.user.first_name}${oldMember.user.last_name ? ' ' + oldMember.user.last_name : ''}" → "${user.first_name}${user.last_name ? ' ' + user.last_name : ''}" (ID: ${user.id})`)
+            }
+
+            // Run impersonation + blacklist check
+            this.checkMember({
+                chatId: update.chat.id,
+                chatMemberId: user.id,
+                chatMemberFirstName: user.first_name,
+                chatMemberLastName: user.last_name || '',
+                chatMemberUserName: user.username || '',
+                isBot: user.is_bot,
+                messageId: undefined  // no message to delete on name change
+            })
+        })
+
         if (this.botConfigurator.getConfiguration().rules.checkImage.validate) {
             this.botApiProcessor.on('photo', (ctx) => this.processMultimediaMessage(ctx.message, 'Image'))
         }
