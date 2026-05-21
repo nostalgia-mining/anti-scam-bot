@@ -25,7 +25,7 @@ export class BotConfigurator {
         
         let interval = parseInt(messageRules)
 
-        if (interval != NaN && interval >= 1000 && interval <= 3600000) {
+        if (!isNaN(interval) && interval >= 1000 && interval <= 3600000) {
             this.configuration.checkMemberInterval = messageRules
                 
             this.botMessage.displayMessage(`Process Check Member Interval updated to: ${interval}`)
