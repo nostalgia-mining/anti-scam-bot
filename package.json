@@ -1,7 +1,7 @@
 {
   "name": "telegram-bot-monitor",
   "description": "Telegram Anti-Scam Bot",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "author": "nostalgia",
   "private": true,
   "scripts": {
@@ -14,7 +14,7 @@
     "pg": "^7.4.1",
     "reflect-metadata": "^0.1.12",
     "sqlite3": "^4.0.0",
-    "telegraf": "^3.19.0",
+    "telegraf": "^4.16.0",
     "ts-node": "^5.0.1",
     "typeorm": "^0.1.16",
     "typescript": "^4.9.5",

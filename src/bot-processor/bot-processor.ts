@@ -1,6 +1,6 @@
 import "reflect-metadata"
 import { createConnection, Entity, Column, getManager } from "typeorm"
-import Telegraf, { Extra } from "telegraf"
+import { Telegraf, Markup } from "telegraf"
 import * as fs from "fs"
 import { BotConfigurator } from "../bot-processor/bot-configurator"
 import { BotMessage } from "../bot-processor/bot-message"
@@ -81,13 +81,14 @@ export class BotProcessor {
         this.log("Starting Telegram polling...")
         // Explicitly request all update types we need — without this Telegram may use
         // a cached filter from a previous session that excludes service messages like new_chat_members
-        this.botApiProcessor.startPolling(30, 100, [
-            'message',
-            'edited_message',
-            'callback_query',
-            'new_chat_members',
-            'left_chat_member'
-        ])
+        this.botApiProcessor.launch({
+            allowedUpdates: [
+                'message',
+                'edited_message',
+                'callback_query',
+                'chat_member'
+            ]
+        })
         this.log("Starting Telegram polling... Done.")
 
         // Refresh admin list every hour
@@ -784,10 +785,18 @@ export class BotProcessor {
         // Mute: remove all send permissions indefinitely
         try {
             await this.botApiProcessor.telegram.restrictChatMember(chatId, memberId, {
-                can_send_messages: false,
-                can_send_media_messages: false,
-                can_send_other_messages: false,
-                can_add_web_page_previews: false
+                permissions: {
+                    can_send_messages: false,
+                    can_send_audios: false,
+                    can_send_documents: false,
+                    can_send_photos: false,
+                    can_send_videos: false,
+                    can_send_video_notes: false,
+                    can_send_voice_notes: false,
+                    can_send_polls: false,
+                    can_send_other_messages: false,
+                    can_add_web_page_previews: false
+                }
             })
             this.log(`BLACKLISTED NAME — "${displayName}" muted for matching keyword "${matchedKeyword}"`)
         } catch (e) {
@@ -957,7 +966,7 @@ export class BotProcessor {
                     this.dbConnection.getRepository(ChatMember).save(memberDetails);
                 } else {
                     this.botMessage.displayMessage("Ban member from group.")
-                    this.botApiProcessor.telegram.kickChatMember(this.botConfigurator.getConfiguration().chatId, member.chatMemberId, 0).then(details => {
+                    this.botApiProcessor.telegram.banChatMember(this.botConfigurator.getConfiguration().chatId, member.chatMemberId, 0).then(details => {
                         this.log(`Member ${member.chatMemberId} banned successfully.`)
 
                         this.dbConnection.getRepository(ChatMember).removeById(member.chatMemberId);
@@ -977,7 +986,7 @@ export class BotProcessor {
 
                         this.addMemberHistory(memberData)
                     }).catch((e) => {
-                        this.log("Telegram API ERROR (kickChatMember)", { message: e.message, code: e.code })
+                        this.log("Telegram API ERROR (banChatMember)", { message: e.message, code: e.code })
                     })
                 }
             }
@@ -1081,38 +1090,36 @@ export class BotProcessor {
 
         let menus = []
 
-        let configurationMenu = Extra
-                .markdown()
-                .markup((m) => m.inlineKeyboard([
+        let configurationMenu = Markup.inlineKeyboard([
                     [
-                        m.callbackButton('Fake Admin Phishing', 'checkAdmin'),
-                        m.callbackButton('Check for Wallet/Key', 'checkWalletKey')
+                        Markup.button.callback('Fake Admin Phishing', 'checkAdmin'),
+                        Markup.button.callback('Check for Wallet/Key', 'checkWalletKey')
                     ],
                     [
-                        m.callbackButton('Check for Banned Words', 'checkBadWord'),
-                        m.callbackButton('Check for URLs', 'checkUrl')
+                        Markup.button.callback('Check for Banned Words', 'checkBadWord'),
+                        Markup.button.callback('Check for URLs', 'checkUrl')
                     ],
                     [
-                        m.callbackButton('Check for Images', 'checkImage'),
-                        m.callbackButton('Check for Audio', 'checkAudio')
+                        Markup.button.callback('Check for Images', 'checkImage'),
+                        Markup.button.callback('Check for Audio', 'checkAudio')
                     ],
                     [
-                        m.callbackButton('Check for Video', 'checkVideo'),
-                        m.callbackButton('Set Banned Words', 'badWords')
+                        Markup.button.callback('Check for Video', 'checkVideo'),
+                        Markup.button.callback('Set Banned Words', 'badWords')
                     ],
                     [
-                        m.callbackButton('🚫 Blacklisted Names', 'nameBlacklist')
+                        Markup.button.callback('🚫 Blacklisted Names', 'nameBlacklist')
                     ],
                     [
-                        m.callbackButton('Set Reply Messages', 'replyMessages')
+                        Markup.button.callback('Set Reply Messages', 'replyMessages')
                     ],
                     [
-                        m.callbackButton('🧹 Clean Deleted Accounts', 'cleanDeleted')
+                        Markup.button.callback('🧹 Clean Deleted Accounts', 'cleanDeleted')
                     ],
                     [
-                        m.callbackButton('📋 Last 10 Banned Impersonators', 'reportImpersonators')
+                        Markup.button.callback('📋 Last 10 Banned Impersonators', 'reportImpersonators')
                     ]
-                ]))
+                ])
 
         this.botApiProcessor.hears(/menu/i, (ctx) => {
             if (this.isAdminMessage(ctx.message.from.id) && ctx.message.chat.id != this.chatId) {
@@ -1152,13 +1159,13 @@ export class BotProcessor {
         })
 
         this.botApiProcessor.action('mainMenu', (ctx) => {
-            if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+            if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                 ctx.reply('Configuration Menu', configurationMenu)
             }
         })
 
         this.botApiProcessor.action('reportImpersonators', async (ctx) => {
-            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
 
             try {
                 const records = await this.dbConnection
@@ -1171,7 +1178,7 @@ export class BotProcessor {
 
                 const report = this.buildImpersonatorReport(records)
                 ctx.reply(report)
-                this.log(`Admin ${this.adminName(ctx.update.callback_query.from.id)} requested impersonator report via menu`)
+                this.log(`Admin ${this.adminName(ctx.callbackQuery.from.id)} requested impersonator report via menu`)
                 this.log(report)
             } catch (e) {
                 this.log("Error fetching impersonator report", { message: e.message })
@@ -1181,40 +1188,36 @@ export class BotProcessor {
 
         checkRules.forEach(rule => {
             if (rule.type == 'checkAdmin') {
-                menus[rule.type] = Extra
-                                    .markdown()
-                                    .markup((m) => m.inlineKeyboard([
+                menus[rule.type] = Markup.inlineKeyboard([
                                         [
-                                            m.callbackButton('Enable/Disable', `${rule.type}RuleValidate`),
-                                            m.callbackButton('Ban User', `${rule.type}RuleBanUser`)
+                                            Markup.button.callback('Enable/Disable', `${rule.type}RuleValidate`),
+                                            Markup.button.callback('Ban User', `${rule.type}RuleBanUser`)
                                         ],
                                         [
-                                            m.callbackButton('Back to Main Menu', 'mainMenu')
+                                            Markup.button.callback('Back to Main Menu', 'mainMenu')
                                         ]
-                                    ]))
+                                    ])
             } else {
-                menus[rule.type] = Extra
-                                    .markdown()
-                                    .markup((m) => m.inlineKeyboard([
+                menus[rule.type] = Markup.inlineKeyboard([
                                         [
-                                            m.callbackButton('Enable/Disable', `${rule.type}RuleValidate`),
-                                            m.callbackButton('Ban User', `${rule.type}RuleBanUser`)
+                                            Markup.button.callback('Enable/Disable', `${rule.type}RuleValidate`),
+                                            Markup.button.callback('Ban User', `${rule.type}RuleBanUser`)
                                         ],
                                         [
-                                            m.callbackButton('Remove Message', `${rule.type}RuleRemoveMessage`),
-                                            m.callbackButton('Back to Main Menu', 'mainMenu')
+                                            Markup.button.callback('Remove Message', `${rule.type}RuleRemoveMessage`),
+                                            Markup.button.callback('Back to Main Menu', 'mainMenu')
                                         ]
-                                    ]))
+                                    ])
             }
             this.botApiProcessor.action(`${rule.type}`, (ctx) => {
-                if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+                if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                     this.lastConfigRule = ''
                     ctx.reply(rule.title, menus[rule.type])
                 }
             })
 
             this.botApiProcessor.action(`${rule.type}RuleValidate`, (ctx) => {
-                if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+                if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                     let currentStatus = ''
                     let newStatus = ''
 
@@ -1226,12 +1229,10 @@ export class BotProcessor {
                         newStatus = 'Enable'
                     }
 
-                    let validateMenu = Extra
-                        .markdown()
-                        .markup((m) => m.inlineKeyboard([
-                            [m.callbackButton(`${newStatus}`, `${rule.type}RuleValidate${newStatus}`)],
-                            [m.callbackButton(`Back to ${rule.title} Menu`, `${rule.type}`)]
-                        ]));
+                    let validateMenu = Markup.inlineKeyboard([
+                            [Markup.button.callback(`${newStatus}`, `${rule.type}RuleValidate${newStatus}`)],
+                            [Markup.button.callback(`Back to ${rule.title} Menu`, `${rule.type}`)]
+                        ]);
 
                     this.lastConfigRule = ''
                     ctx.reply(`Setting is ${currentStatus}`, validateMenu)
@@ -1239,7 +1240,7 @@ export class BotProcessor {
             })
 
             this.botApiProcessor.action(`${rule.type}RuleValidateEnable`, (ctx) => {
-                if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+                if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                     this.lastConfigRule = ''
                     if (this.botConfigurator.processValidationRule(rule.type, 'on')) {
                         ctx.reply("Setting is set to Enabled")
@@ -1250,7 +1251,7 @@ export class BotProcessor {
             })
 
             this.botApiProcessor.action(`${rule.type}RuleValidateDisable`, (ctx) => {
-                if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+                if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                     this.lastConfigRule = ''
                     if (this.botConfigurator.processValidationRule(rule.type, 'off')) {
                         ctx.reply("Setting is set to Disabled")
@@ -1262,7 +1263,7 @@ export class BotProcessor {
 
 
             this.botApiProcessor.action(`${rule.type}RuleRemoveMessage`, (ctx) => {
-                if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+                if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                     let currentStatus = ''
                     let newStatus = ''
 
@@ -1274,12 +1275,10 @@ export class BotProcessor {
                         newStatus = 'Enable'
                     }
 
-                    let removeMessageMenu = Extra
-                        .markdown()
-                        .markup((m) => m.inlineKeyboard([
-                            [m.callbackButton(`${newStatus}`, `${rule.type}RuleRemoveMessage${newStatus}`)],
-                            [m.callbackButton(`Back to ${rule.title} Menu`, `${rule.type}`)]
-                        ]));
+                    let removeMessageMenu = Markup.inlineKeyboard([
+                            [Markup.button.callback(`${newStatus}`, `${rule.type}RuleRemoveMessage${newStatus}`)],
+                            [Markup.button.callback(`Back to ${rule.title} Menu`, `${rule.type}`)]
+                        ]);
 
                     this.lastConfigRule = ''
                     ctx.reply(`Remove Message Setting is ${currentStatus}`, removeMessageMenu)
@@ -1287,7 +1286,7 @@ export class BotProcessor {
             })
 
             this.botApiProcessor.action(`${rule.type}RuleRemoveMessageEnable`, (ctx) => {
-                if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+                if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                     this.lastConfigRule = ''
                     if (this.botConfigurator.processRemoveMessageRule(rule.type, 'on')) {
                         ctx.reply("Remove Message Setting is set to Enabled")
@@ -1298,7 +1297,7 @@ export class BotProcessor {
             })
 
             this.botApiProcessor.action(`${rule.type}RuleRemoveMessageDisable`, (ctx) => {
-                if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+                if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                     this.lastConfigRule = ''
                     if (this.botConfigurator.processRemoveMessageRule(rule.type, 'off')) {
                         ctx.reply("Remove Message Setting is set to Disabled")
@@ -1310,7 +1309,7 @@ export class BotProcessor {
 
 
             this.botApiProcessor.action(`${rule.type}RuleBanUser`, (ctx) => {
-                if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+                if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                     this.lastConfigRule = ''
                     let banUserMenu
                     let currentStatus = ''
@@ -1319,36 +1318,30 @@ export class BotProcessor {
                     if (warnings == 0) {
                         currentStatus = 'Ban Immediately'
 
-                        banUserMenu = Extra
-                            .markdown()
-                            .markup((m) => m.inlineKeyboard([
-                                [m.callbackButton('Disable', `${rule.type}RuleBanUserDisable`)],
-                                [m.callbackButton('Warn before banning', `${rule.type}RuleBanUserWarn`)],
-                                [m.callbackButton(`Back to ${rule.title} Menu`, `${rule.type}`)]
-                            ]));
+                        banUserMenu = Markup.inlineKeyboard([
+                                [Markup.button.callback('Disable', `${rule.type}RuleBanUserDisable`)],
+                                [Markup.button.callback('Warn before banning', `${rule.type}RuleBanUserWarn`)],
+                                [Markup.button.callback(`Back to ${rule.title} Menu`, `${rule.type}`)]
+                            ]);
 
                     } else if (warnings == -1) {
                         currentStatus = 'Disabled'
 
-                        banUserMenu = Extra
-                            .markdown()
-                            .markup((m) => m.inlineKeyboard([
-                                [m.callbackButton('Ban Immediately', `${rule.type}RuleBanUserImmediately`)],
-                                [m.callbackButton('Warn before banning', `${rule.type}RuleBanUserWarn`)],
-                                [m.callbackButton(`Back to ${rule.title} Menu`, `${rule.type}`)]
-                            ]));
+                        banUserMenu = Markup.inlineKeyboard([
+                                [Markup.button.callback('Ban Immediately', `${rule.type}RuleBanUserImmediately`)],
+                                [Markup.button.callback('Warn before banning', `${rule.type}RuleBanUserWarn`)],
+                                [Markup.button.callback(`Back to ${rule.title} Menu`, `${rule.type}`)]
+                            ]);
 
                     } else {
                         currentStatus = `Ban after ${warnings} warnings`
 
-                        banUserMenu = Extra
-                            .markdown()
-                            .markup((m) => m.inlineKeyboard([
-                                [m.callbackButton('Disable', `${rule.type}RuleBanUserDisable`)],
-                                [m.callbackButton('Ban Immediatelly', `${rule.type}RuleBanUserImmediately`)],
-                                [m.callbackButton('Warn before banning', `${rule.type}RuleBanUserWarn`)],
-                                [m.callbackButton(`Back to ${rule.title} Menu`, `${rule.type}`)]
-                            ]));
+                        banUserMenu = Markup.inlineKeyboard([
+                                [Markup.button.callback('Disable', `${rule.type}RuleBanUserDisable`)],
+                                [Markup.button.callback('Ban Immediatelly', `${rule.type}RuleBanUserImmediately`)],
+                                [Markup.button.callback('Warn before banning', `${rule.type}RuleBanUserWarn`)],
+                                [Markup.button.callback(`Back to ${rule.title} Menu`, `${rule.type}`)]
+                            ]);
 
                     }
                     ctx.reply(`Ban User Setting is ${currentStatus}`, banUserMenu)
@@ -1356,7 +1349,7 @@ export class BotProcessor {
             })
 
             this.botApiProcessor.action(`${rule.type}RuleBanUserImmediately`, (ctx) => {
-                if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+                if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                     if (this.botConfigurator.processBanUserRule(rule.type, '0')) {
                         ctx.reply("Ban User Setting is set to Ban Immediately")
                     } else {
@@ -1366,7 +1359,7 @@ export class BotProcessor {
             })
 
             this.botApiProcessor.action(`${rule.type}RuleBanUserDisable`, (ctx) => {
-                if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+                if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                     if (this.botConfigurator.processBanUserRule(rule.type, '-1')) {
                         ctx.reply("Ban User Setting is set to Disabled")
                     } else {
@@ -1376,7 +1369,7 @@ export class BotProcessor {
             })
 
             this.botApiProcessor.action(`${rule.type}RuleBanUserWarn`, (ctx) => {
-                if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+                if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                     this.lastConfigRule = rule.type
                     ctx.reply("Enter Number of Warnings")
                 }
@@ -1386,17 +1379,15 @@ export class BotProcessor {
 
 
         this.botApiProcessor.action('badWords', (ctx) => {
-            if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+            if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                 let currentWords = this.botConfigurator.getConfiguration().badWords
                 currentWords = currentWords.replace("(", "").replace(")", "").split("|").join(", ")
 
-                let badWordsMenu = Extra
-                    .markdown()
-                    .markup((m) => m.inlineKeyboard([
-                        [m.callbackButton('Add Word/Phrase', 'badWordsSetWord')],
-                        [m.callbackButton('Remove Word/Phrase', 'badWordsUnsetWord')],
-                        [m.callbackButton('Back to Main Menu', 'mainMenu')]
-                    ]));
+                let badWordsMenu = Markup.inlineKeyboard([
+                        [Markup.button.callback('Add Word/Phrase', 'badWordsSetWord')],
+                        [Markup.button.callback('Remove Word/Phrase', 'badWordsUnsetWord')],
+                        [Markup.button.callback('Back to Main Menu', 'mainMenu')]
+                    ]);
 
                 this.lastConfigRule = ''
                 ctx.reply(`Current Banned Word/Phrase(s) are ${currentWords}`, badWordsMenu)
@@ -1404,14 +1395,14 @@ export class BotProcessor {
         })
 
         this.botApiProcessor.action('badWordsSetWord', (ctx) => {
-            if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+            if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                 this.lastConfigRule = 'badWordsSet'
                 ctx.reply("Enter Word/Phrase(s) to add delimited with comma")
             }
         })
 
         this.botApiProcessor.action('badWordsUnsetWord', (ctx) => {
-            if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+            if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                 this.lastConfigRule = 'badWordsUnset'
                 ctx.reply("Enter Word/Phrase(s) to remove delimited with comma")
             }
@@ -1419,21 +1410,19 @@ export class BotProcessor {
 
 
         this.botApiProcessor.action('replyMessages', (ctx) => {
-            if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+            if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                 let currentWords = this.botConfigurator.getConfiguration().badWords
                 currentWords = currentWords.replace("(", "").replace(")", "").split("|").join(", ")
 
-                let replyMessagesMenu = Extra
-                    .markdown()
-                    .markup((m) => m.inlineKeyboard([
-                        [m.callbackButton('Inappropriate Content Message', 'inappropriateContentReplyMessage')],
-                        [m.callbackButton('Wallet Address / Private Key Message', 'walletKeyReplyMessage')],
-                        [m.callbackButton('Posting Image Message', 'imageReplyMessage')],
-                        [m.callbackButton('Posting Video Message', 'videoReplyMessage')],
-                        [m.callbackButton('Posting Audio Message', 'audioReplyMessage')],
-                        [m.callbackButton('Posting URL Message', 'urlReplyMessage')],
-                        [m.callbackButton('Warning to Member', 'warningReplyMessage')]
-                    ]));
+                let replyMessagesMenu = Markup.inlineKeyboard([
+                        [Markup.button.callback('Inappropriate Content Message', 'inappropriateContentReplyMessage')],
+                        [Markup.button.callback('Wallet Address / Private Key Message', 'walletKeyReplyMessage')],
+                        [Markup.button.callback('Posting Image Message', 'imageReplyMessage')],
+                        [Markup.button.callback('Posting Video Message', 'videoReplyMessage')],
+                        [Markup.button.callback('Posting Audio Message', 'audioReplyMessage')],
+                        [Markup.button.callback('Posting URL Message', 'urlReplyMessage')],
+                        [Markup.button.callback('Warning to Member', 'warningReplyMessage')]
+                    ]);
 
                 this.lastConfigRule = ''
                 ctx.reply("Reply Messages", replyMessagesMenu)
@@ -1442,7 +1431,7 @@ export class BotProcessor {
 
         replyMessages.forEach(replyMessage => {
             this.botApiProcessor.action(`${replyMessage.type}`, (ctx) => {
-                if (this.isAdminMessage(ctx.update.callback_query.from.id)) {
+                if (this.isAdminMessage(ctx.callbackQuery.from.id)) {
                     this.lastConfigRule = replyMessage.type
                     ctx.reply(`Current Reply Message is: ${this.botConfigurator.getConfiguration().replyMessages[replyMessage.type.replace('ReplyMessage', '')]}. \n\nEnter new Reply Message`)
                 }
@@ -1451,36 +1440,34 @@ export class BotProcessor {
 
         // ── Blacklisted Names ─────────────────────────────────────────────────
         this.botApiProcessor.action('nameBlacklist', (ctx) => {
-            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
             const list: string[] = Array.isArray((this.botConfigurator.getConfiguration() as any).nameBlacklist)
                 ? (this.botConfigurator.getConfiguration() as any).nameBlacklist
                 : []
             const count = list.length
-            const nameBlacklistMenu = Extra
-                .markdown()
-                .markup((m) => m.inlineKeyboard([
-                    [m.callbackButton('➕ Add', 'nameBlacklistAdd'), m.callbackButton('➖ Remove', 'nameBlacklistRemove')],
-                    [m.callbackButton('📋 List', 'nameBlacklistList')],
-                    [m.callbackButton('Back to Main Menu', 'mainMenu')]
-                ]))
+            const nameBlacklistMenu = Markup.inlineKeyboard([
+                    [Markup.button.callback('➕ Add', 'nameBlacklistAdd'), Markup.button.callback('➖ Remove', 'nameBlacklistRemove')],
+                    [Markup.button.callback('📋 List', 'nameBlacklistList')],
+                    [Markup.button.callback('Back to Main Menu', 'mainMenu')]
+                ])
             this.lastConfigRule = ''
             ctx.reply(`Blacklisted Names (${count} keyword${count !== 1 ? 's' : ''})`, nameBlacklistMenu)
         })
 
         this.botApiProcessor.action('nameBlacklistAdd', (ctx) => {
-            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
             this.lastConfigRule = 'nameBlacklistAdd'
             ctx.reply('Enter the keyword to add to the name blacklist:')
         })
 
         this.botApiProcessor.action('nameBlacklistRemove', (ctx) => {
-            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
             this.lastConfigRule = 'nameBlacklistRemove'
             ctx.reply('Enter the keyword to remove from the name blacklist:')
         })
 
         this.botApiProcessor.action('nameBlacklistList', (ctx) => {
-            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
             const list: string[] = Array.isArray((this.botConfigurator.getConfiguration() as any).nameBlacklist)
                 ? (this.botConfigurator.getConfiguration() as any).nameBlacklist
                 : []
@@ -1524,12 +1511,12 @@ export class BotProcessor {
         }
 
         this.botApiProcessor.action('cleanDeleted', async (ctx) => {
-            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
             await memberMgmtMenu(ctx)
         })
 
         this.botApiProcessor.action('mmSetup', (ctx) => {
-            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
             this.lastConfigRule = 'mmApiId'
             ctx.reply('Enter your Telethon API ID (the number from my.telegram.org):')
         })
@@ -1566,34 +1553,34 @@ export class BotProcessor {
         }
 
         this.botApiProcessor.action('mmExport', async (ctx) => {
-            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
-            spawnMemberScript('export', ctx.update.callback_query.from.id, ctx, false)
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
+            spawnMemberScript('export', ctx.callbackQuery.from.id, ctx, false)
         })
 
         this.botApiProcessor.action('mmImport', async (ctx) => {
-            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
-            spawnMemberScript('import', ctx.update.callback_query.from.id, ctx, false)
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
+            spawnMemberScript('import', ctx.callbackQuery.from.id, ctx, false)
         })
 
         this.botApiProcessor.action('mmScan', async (ctx) => {
-            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
-            spawnMemberScript('scan', ctx.update.callback_query.from.id, ctx, false)
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
+            spawnMemberScript('scan', ctx.callbackQuery.from.id, ctx, false)
         })
 
         this.botApiProcessor.action('mmCleanup', async (ctx) => {
-            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
-            spawnMemberScript('cleanup', ctx.update.callback_query.from.id, ctx, false)
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
+            spawnMemberScript('cleanup', ctx.callbackQuery.from.id, ctx, false)
         })
 
         this.botApiProcessor.action('mmCrosscheckDry', async (ctx) => {
-            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
             // Report only — no bans, bot does NOT need to stop
-            spawnMemberScript('crosscheckdry', ctx.update.callback_query.from.id, ctx, false)
+            spawnMemberScript('crosscheckdry', ctx.callbackQuery.from.id, ctx, false)
         })
 
         this.botApiProcessor.action('mmCrosscheck', async (ctx) => {
-            if (!this.isAdminMessage(ctx.update.callback_query.from.id)) return
-            spawnMemberScript('crosscheck', ctx.update.callback_query.from.id, ctx, false)
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
+            spawnMemberScript('crosscheck', ctx.callbackQuery.from.id, ctx, false)
         })
     }
 
