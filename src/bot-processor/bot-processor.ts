@@ -1,5 +1,5 @@
 import "reflect-metadata"
-import { createConnection, Entity, Column, getManager } from "typeorm"
+import { DataSource, Entity, Column } from "typeorm"
 import { Telegraf, Markup } from "telegraf"
 import * as fs from "fs"
 import { BotConfigurator } from "../bot-processor/bot-configurator"
@@ -547,7 +547,7 @@ export class BotProcessor {
         const isRealJoin = message.isRealJoin === true
 
         // Check if member already exists in DB
-        this.dbConnection.getRepository(ChatMember).findOne({ chatMemberId: message.new_chat_member.id }).then(existing => {
+        this.dbConnection.getRepository(ChatMember).findOneBy({ chatMemberId: message.new_chat_member.id }).then(existing => {
             if (existing) {
                 // Member already in DB — only check for impersonation on real joins, don't overwrite joinDate
                 if (isRealJoin && !this.chatAdmins.some(admin => admin.id == message.new_chat_member.id)) {
@@ -633,7 +633,7 @@ export class BotProcessor {
                      ${message.left_chat_member.first_name}
                      ${((message.left_chat_member.last_name) ? message.left_chat_member.last_name : '')}`)
 
-        this.dbConnection.getRepository(ChatMember).removeById(message.left_chat_member.id)
+        this.dbConnection.getRepository(ChatMember).delete({ chatMemberId: message.left_chat_member.id })
 
         let memberData = {
             chatId: message.chat.id,
@@ -912,7 +912,7 @@ export class BotProcessor {
 }
 
     private banOrWarnMember(member, messageType) {
-        this.dbConnection.getRepository(ChatMember).findOneById(member.chatMemberId).then(memberDetails => {
+        this.dbConnection.getRepository(ChatMember).findOneBy({ chatMemberId: member.chatMemberId }).then(memberDetails => {
 
             if (memberDetails) {
                 let banImmediately = -1
@@ -969,7 +969,7 @@ export class BotProcessor {
                     this.botApiProcessor.telegram.banChatMember(this.botConfigurator.getConfiguration().chatId, member.chatMemberId, 0).then(details => {
                         this.log(`Member ${member.chatMemberId} banned successfully.`)
 
-                        this.dbConnection.getRepository(ChatMember).removeById(member.chatMemberId);
+                        this.dbConnection.getRepository(ChatMember).delete({ chatMemberId: member.chatMemberId });
 
                         let memberData = {
                             chatId: member.chatId,
@@ -1637,7 +1637,8 @@ export class BotProcessor {
 			connectionOptions.insecureAuth = true
 			connectionOptions.entities = [ChatMember, MemberHistory]
 
-			this.dbConnection = await createConnection(connectionOptions)
+			const dataSource = new DataSource(connectionOptions)
+			this.dbConnection = await dataSource.initialize()
 
 			// Enable WAL mode for safer concurrent access with Python scripts
 			await this.dbConnection.query('PRAGMA journal_mode=WAL;')
