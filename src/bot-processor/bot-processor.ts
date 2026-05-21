@@ -199,7 +199,7 @@ export class BotProcessor {
     private buildImpersonatorReport(records: any[]): string {
         if (!records || records.length === 0) return '[ No banned impersonators on record yet. ]'
 
-        const lines = ['=== Last 10 banned impersonators ===\n']
+        const lines = ['=== Last 10 banned impersonators ===']
         records.forEach((r, i) => {
             const identifier = r.chatMemberUserName ? `@${r.chatMemberUserName}` : `(no username)`
             // banDate can be a Unix timestamp (number), a date string, or zero/null
@@ -1177,7 +1177,10 @@ export class BotProcessor {
                     .getMany()
 
                 const report = this.buildImpersonatorReport(records)
-                ctx.reply(report)
+                const backButton = Markup.inlineKeyboard([
+                    [Markup.button.callback('Back to Main Menu', 'mainMenu')]
+                ])
+                ctx.reply(report, backButton)
                 this.log(`Admin ${this.adminName(ctx.callbackQuery.from.id)} requested impersonator report via menu`)
                 this.log(report)
             } catch (e) {
