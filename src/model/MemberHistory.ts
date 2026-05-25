@@ -34,7 +34,7 @@ export class MemberHistory {
    joinDate: number;
 
    @Column()
-   banDate: number;
+   banDate: number = 0;
 
    @Column()
    reason: string;
