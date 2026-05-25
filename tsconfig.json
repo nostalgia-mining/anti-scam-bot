@@ -20,7 +20,10 @@
     "emitDecoratorMetadata": true,            /* Enables experimental support for emitting type metadata for decorators. */
     "downlevelIteration": true,               /* Enable iteration over Set/Map/iterables when targeting ES5/ES2015. */
     "esModuleInterop": true,                  /* Allows default imports from CommonJS modules (e.g. telegraf). */
-    "typeRoots": ["node_modules/@types"]
+    "typeRoots": ["node_modules/@types"],
+    "ts-node": {
+      "transpileOnly": true
+    }
   },
   "include": [
     "src/**/*.ts",
