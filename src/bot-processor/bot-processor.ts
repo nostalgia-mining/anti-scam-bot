@@ -129,6 +129,8 @@ export class BotProcessor {
         lines.push(`Admin list loaded at ${timestamp}`)
         lines.push(`${'='.repeat(60)}`)
 
+        const MIN_NAME_LENGTH = 4
+
         for (const admin of this.chatAdmins) {
             const first = this.normalize(admin.firstName)
             const last = this.normalize(admin.lastName)
@@ -136,8 +138,13 @@ export class BotProcessor {
             const full = first + last
 
             if (full) {
-                if (!this.adminSet.has(full)) this.adminSet.set(full, new Set())
-                this.adminSet.get(full).add(admin.id)
+                if (full.length < MIN_NAME_LENGTH) {
+                    const usernameDisplay = admin.userName ? ` @${admin.userName}` : ''
+                    this.log(`⚠️ Admin "${admin.firstName}"${usernameDisplay} (ID: ${admin.id}) has a name too short for impersonation detection (${full.length} chars, minimum is ${MIN_NAME_LENGTH}). Consider using a more unique display name.`)
+                } else {
+                    if (!this.adminSet.has(full)) this.adminSet.set(full, new Set())
+                    this.adminSet.get(full).add(admin.id)
+                }
             }
 
             lines.push(`ID:         ${admin.id}`)
