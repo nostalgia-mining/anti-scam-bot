@@ -36,6 +36,74 @@ export class BotProcessor {
             : ''
     }
 
+    // Homoglyph map: visually similar characters → Latin equivalent
+    private static readonly HOMOGLYPHS: Record<string, string> = {
+        'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'у': 'y',
+        'х': 'x', 'і': 'i', 'ї': 'i', 'ё': 'e', 'к': 'k', 'м': 'm',
+        'н': 'h', 'т': 't', 'ь': 'b', 'ν': 'v', 'α': 'a', 'β': 'b',
+        'ε': 'e', 'η': 'n', 'ι': 'i', 'κ': 'k', 'ο': 'o', 'ρ': 'p',
+        'τ': 't', 'υ': 'u', 'χ': 'x', 'ω': 'w', 'ɑ': 'a', 'ɡ': 'g',
+        'ɪ': 'i', 'ɴ': 'n', 'ʀ': 'r', 'ʏ': 'y', 'ꝺ': 'd', 'ꞓ': 'c',
+        '0': 'o', '1': 'l', '3': 'e', '5': 's', '8': 'b'
+    }
+
+    // Normalize with homoglyph replacement for visual impersonation detection
+    private normalizeHomoglyphs(val: string | undefined): string {
+        if (!val) return ''
+        let result = val.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}]/gu, '')
+        let mapped = ''
+        for (const ch of result) {
+            mapped += BotProcessor.HOMOGLYPHS[ch] || ch
+        }
+        return mapped
+    }
+
+    // Jaro-Winkler similarity (0.0 to 1.0)
+    private jaroWinkler(s1: string, s2: string): number {
+        if (s1 === s2) return 1.0
+        if (s1.length === 0 || s2.length === 0) return 0.0
+
+        const matchDistance = Math.floor(Math.max(s1.length, s2.length) / 2) - 1
+        const s1Matches = new Array(s1.length).fill(false)
+        const s2Matches = new Array(s2.length).fill(false)
+
+        let matches = 0
+        let transpositions = 0
+
+        for (let i = 0; i < s1.length; i++) {
+            const start = Math.max(0, i - matchDistance)
+            const end = Math.min(i + matchDistance + 1, s2.length)
+            for (let j = start; j < end; j++) {
+                if (s2Matches[j] || s1[i] !== s2[j]) continue
+                s1Matches[i] = true
+                s2Matches[j] = true
+                matches++
+                break
+            }
+        }
+
+        if (matches === 0) return 0.0
+
+        let k = 0
+        for (let i = 0; i < s1.length; i++) {
+            if (!s1Matches[i]) continue
+            while (!s2Matches[k]) k++
+            if (s1[i] !== s2[k]) transpositions++
+            k++
+        }
+
+        const jaro = (matches / s1.length + matches / s2.length + (matches - transpositions / 2) / matches) / 3
+
+        // Winkler bonus for common prefix (up to 4 chars)
+        let prefix = 0
+        for (let i = 0; i < Math.min(4, Math.min(s1.length, s2.length)); i++) {
+            if (s1[i] === s2[i]) prefix++
+            else break
+        }
+
+        return jaro + prefix * 0.1 * (1 - jaro)
+    }
+
     constructor() {
         this.botConfigurator = new BotConfigurator()
         this.botMessage = new BotMessage()
@@ -658,7 +726,7 @@ export class BotProcessor {
         this.addMemberHistory(memberData)
     }
 
-    // Returns the impersonated admin's display name if the member should be banned, null otherwise
+    // Layer 1: Returns the impersonated admin's display name if EXACT normalized match, null otherwise
     private userShouldBeBanned(member): string | null {
         if (!this.botConfigurator.getConfiguration().rules.checkAdmin.validate) {
             return null
@@ -666,8 +734,9 @@ export class BotProcessor {
 
         const first = this.normalize(member.first_name)
         const last = this.normalize(member.last_name)
-
         const full = first + last
+
+        // Layer 1: exact normalized match
         if (full && this.adminSet.has(full)) {
             const matchedAdminIds = this.adminSet.get(full)
             const stillExistingAdmin = this.chatAdmins.find(a =>
@@ -683,6 +752,61 @@ export class BotProcessor {
             const adminDisplayName = stillExistingAdmin.firstName +
                 (stillExistingAdmin.lastName ? ' ' + stillExistingAdmin.lastName : '')
             return adminDisplayName
+        }
+
+        // Layer 2: homoglyph-normalized exact match
+        const fullHomoglyph = this.normalizeHomoglyphs(member.first_name) + this.normalizeHomoglyphs(member.last_name)
+        if (fullHomoglyph && fullHomoglyph.length >= 4) {
+            for (const admin of this.chatAdmins) {
+                if (admin.id === member.id) continue
+                const adminHomoglyph = this.normalizeHomoglyphs(admin.firstName) + this.normalizeHomoglyphs(admin.lastName)
+                if (adminHomoglyph.length < 4) continue
+                if (fullHomoglyph === adminHomoglyph) {
+                    const adminDisplayName = admin.firstName +
+                        (admin.lastName ? ' ' + admin.lastName : '')
+                    return adminDisplayName
+                }
+            }
+        }
+
+        return null
+    }
+
+    // Layers 3 & 4: Returns { adminName, reason } if fuzzy match detected, null otherwise
+    // These result in MUTE, not ban
+    private userShouldBeMuted(member): { adminName: string, reason: string } | null {
+        if (!this.botConfigurator.getConfiguration().rules.checkAdmin.validate) {
+            return null
+        }
+
+        const SIMILARITY_THRESHOLD = 0.70
+        const userFull = this.normalizeHomoglyphs(member.first_name) + this.normalizeHomoglyphs(member.last_name)
+        if (!userFull || userFull.length < 4) return null
+
+        for (const admin of this.chatAdmins) {
+            if (admin.id === member.id) continue
+            const adminFull = this.normalizeHomoglyphs(admin.firstName) + this.normalizeHomoglyphs(admin.lastName)
+            if (adminFull.length < 4) continue
+
+            // Layer 3: substring containment with percentage threshold
+            const shorter = userFull.length <= adminFull.length ? userFull : adminFull
+            const longer = userFull.length > adminFull.length ? userFull : adminFull
+            if (longer.includes(shorter)) {
+                const ratio = shorter.length / longer.length
+                if (ratio >= SIMILARITY_THRESHOLD) {
+                    const adminDisplayName = admin.firstName +
+                        (admin.lastName ? ' ' + admin.lastName : '')
+                    return { adminName: adminDisplayName, reason: `substring match (${Math.round(ratio * 100)}%)` }
+                }
+            }
+
+            // Layer 4: Jaro-Winkler similarity
+            const similarity = this.jaroWinkler(userFull, adminFull)
+            if (similarity >= SIMILARITY_THRESHOLD) {
+                const adminDisplayName = admin.firstName +
+                    (admin.lastName ? ' ' + admin.lastName : '')
+                return { adminName: adminDisplayName, reason: `name similarity (${Math.round(similarity * 100)}%)` }
+            }
         }
 
         return null
@@ -746,12 +870,23 @@ export class BotProcessor {
 
             // Check name against blacklist (only if not already caught as impersonator)
             if (impersonatedAdmin === null) {
-                const matchedKeyword = this.nameMatchesBlacklist(details)
-                if (matchedKeyword !== null) {
+                // Layers 3 & 4: fuzzy impersonation check → mute
+                const fuzzyMatch = this.userShouldBeMuted(details)
+                if (fuzzyMatch !== null) {
                     const displayName = details.first_name +
                         (details.last_name ? ' ' + details.last_name : '') +
                         (details.username ? ' (@' + details.username + ')' : '')
-                    await this.muteMember(details.id, this.chatId, displayName, member.messageId, matchedKeyword)
+                    this.log(`FUZZY IMPERSONATION — "${displayName}" resembles admin "${fuzzyMatch.adminName}" (${fuzzyMatch.reason}) — muting`)
+                    await this.muteMember(details.id, this.chatId, displayName, member.messageId, `resembles admin "${fuzzyMatch.adminName}" (${fuzzyMatch.reason})`)
+                } else {
+                    // Name blacklist check (only if not caught by fuzzy either)
+                    const matchedKeyword = this.nameMatchesBlacklist(details)
+                    if (matchedKeyword !== null) {
+                        const displayName = details.first_name +
+                            (details.last_name ? ' ' + details.last_name : '') +
+                            (details.username ? ' (@' + details.username + ')' : '')
+                        await this.muteMember(details.id, this.chatId, displayName, member.messageId, matchedKeyword)
+                    }
                 }
             }
 
