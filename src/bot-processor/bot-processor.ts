@@ -1195,6 +1195,27 @@ export class BotProcessor {
             const newMember = update.new_chat_member
             const oldMember = update.old_chat_member
 
+            const user = newMember.user
+            const displayName = user.first_name +
+                (user.last_name ? ' ' + user.last_name : '') +
+                (user.username ? ' (@' + user.username + ')' : '')
+
+            // Log every chat_member event for debugging
+            const isJoin = (oldMember.status === 'left' || oldMember.status === 'kicked') && newMember.status === 'member'
+            const isLeave = oldMember.status === 'member' && (newMember.status === 'left' || newMember.status === 'kicked')
+            const nameChanged = oldMember.status === 'member' && newMember.status === 'member' &&
+                (oldMember.user.first_name !== user.first_name || oldMember.user.last_name !== user.last_name)
+
+            if (isJoin) {
+                this.log(`[chat_member] JOIN: ${displayName} (ID: ${user.id})`)
+            } else if (isLeave) {
+                this.log(`[chat_member] LEAVE: ${displayName} (ID: ${user.id})`)
+            } else if (nameChanged) {
+                this.log(`[chat_member] NAME CHANGE: "${oldMember.user.first_name}${oldMember.user.last_name ? ' ' + oldMember.user.last_name : ''}" → "${user.first_name}${user.last_name ? ' ' + user.last_name : ''}" (ID: ${user.id})`)
+            } else {
+                this.log(`[chat_member] STATUS: ${oldMember.status} → ${newMember.status} for ${displayName} (ID: ${user.id})`)
+            }
+
             // Only process if the user is currently a member (not left/banned/restricted)
             if (newMember.status !== 'member' && newMember.status !== 'creator' && newMember.status !== 'administrator') {
                 return
@@ -1202,19 +1223,6 @@ export class BotProcessor {
 
             // Skip admins
             if (this.isAdminMessage(newMember.user.id)) return
-
-            const user = newMember.user
-            const displayName = user.first_name +
-                (user.last_name ? ' ' + user.last_name : '') +
-                (user.username ? ' (@' + user.username + ')' : '')
-
-            // Detect name change — old and new status are both 'member' but name differs
-            const nameChanged = oldMember.status === 'member' &&
-                (oldMember.user.first_name !== user.first_name || oldMember.user.last_name !== user.last_name)
-
-            if (nameChanged) {
-                this.log(`Name change detected: "${oldMember.user.first_name}${oldMember.user.last_name ? ' ' + oldMember.user.last_name : ''}" → "${user.first_name}${user.last_name ? ' ' + user.last_name : ''}" (ID: ${user.id})`)
-            }
 
             // Run impersonation + blacklist check
             this.checkMember({
@@ -1224,7 +1232,7 @@ export class BotProcessor {
                 chatMemberLastName: user.last_name || '',
                 chatMemberUserName: user.username || '',
                 isBot: user.is_bot,
-                messageId: undefined  // no message to delete on name change
+                messageId: undefined  // no message to delete on name change/join
             })
         })
 
