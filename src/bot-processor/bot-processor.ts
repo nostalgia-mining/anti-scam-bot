@@ -150,12 +150,14 @@ export class BotProcessor {
         // Explicitly request all update types we need — without this Telegram may use
         // a cached filter from a previous session that excludes service messages like new_chat_members
         this.botApiProcessor.launch({
-            allowedUpdates: [
-                'message',
-                'edited_message',
-                'callback_query',
-                'chat_member'
-            ]
+            polling: {
+                allowedUpdates: [
+                    'message',
+                    'edited_message',
+                    'callback_query',
+                    'chat_member'
+                ]
+            }
         })
         this.log("Starting Telegram polling... Done.")
 
