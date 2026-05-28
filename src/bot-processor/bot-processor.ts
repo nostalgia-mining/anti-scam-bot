@@ -150,14 +150,13 @@ export class BotProcessor {
         // Explicitly request all update types we need — without this Telegram may use
         // a cached filter from a previous session that excludes service messages like new_chat_members
         this.botApiProcessor.launch({
-            polling: {
-                allowedUpdates: [
-                    'message',
-                    'edited_message',
-                    'callback_query',
-                    'chat_member'
-                ]
-            }
+            dropPendingUpdates: false,
+            allowedUpdates: [
+                'message',
+                'edited_message',
+                'callback_query',
+                'chat_member'
+            ]
         })
         this.log("Starting Telegram polling... Done.")
 
@@ -1189,9 +1188,9 @@ export class BotProcessor {
         })
         this.botApiProcessor.on('left_chat_member', (ctx) => this.removeMember(ctx.message))
 
-        // chat_member update — fires on join, leave, ban, and NAME CHANGES
-        // even with "Hide Members" enabled. This catches impersonators who join
-        // clean then rename to match an admin.
+        // chat_member update — fires on join, leave, ban, and promotions
+        // even with "Hide Members" enabled. NOTE: Telegram does NOT send this
+        // event for name changes — those are only caught on the next message.
         this.botApiProcessor.on('chat_member', (ctx) => {
             const update = ctx.chatMember
             const newMember = update.new_chat_member
