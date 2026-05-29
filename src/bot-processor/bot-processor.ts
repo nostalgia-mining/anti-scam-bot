@@ -878,7 +878,7 @@ export class BotProcessor {
                         (details.last_name ? ' ' + details.last_name : '') +
                         (details.username ? ' (@' + details.username + ')' : '')
                     this.log(`FUZZY IMPERSONATION — "${displayName}" resembles admin "${fuzzyMatch.adminName}" (${fuzzyMatch.reason}) — muting`)
-                    await this.muteMember(details.id, this.chatId, displayName, member.messageId, `resembles admin "${fuzzyMatch.adminName}" (${fuzzyMatch.reason})`)
+                    await this.muteMember(details.id, this.chatId, displayName, member.messageId, `resembles admin "${fuzzyMatch.adminName}" (${fuzzyMatch.reason})`, 'fuzzy')
                 } else {
                     // Name blacklist check (only if not caught by fuzzy either)
                     const matchedKeyword = this.nameMatchesBlacklist(details)
@@ -924,7 +924,7 @@ export class BotProcessor {
         return null
     }
 
-    private async muteMember(memberId: number, chatId: number, displayName: string, messageId: number | undefined, matchedKeyword: string) {
+    private async muteMember(memberId: number, chatId: number, displayName: string, messageId: number | undefined, matchedKeyword: string, muteType: 'blacklist' | 'fuzzy' = 'blacklist') {
         // Mute: remove all send permissions indefinitely
         try {
             await this.botApiProcessor.telegram.restrictChatMember(chatId, memberId, {
@@ -941,7 +941,11 @@ export class BotProcessor {
                     can_add_web_page_previews: false
                 }
             })
-            this.log(`BLACKLISTED NAME — "${displayName}" muted for matching keyword "${matchedKeyword}"`)
+            if (muteType === 'fuzzy') {
+                this.log(`FUZZY MUTE — "${displayName}" muted: ${matchedKeyword}`)
+            } else {
+                this.log(`BLACKLISTED NAME — "${displayName}" muted for matching keyword "${matchedKeyword}"`)
+            }
         } catch (e) {
             this.log(`Could not mute member ${memberId}`, { message: e.message })
         }
@@ -949,18 +953,23 @@ export class BotProcessor {
         // Delete the triggering message if present
         if (messageId) {
             this.botApiProcessor.telegram.deleteMessage(chatId, messageId)
-                .then(() => this.log(`Blacklisted name message deleted (ID: ${messageId})`))
+                .then(() => this.log(`Muted member message deleted (ID: ${messageId})`))
                 .catch((e) => {
                     if (!e.message.includes('message to delete not found')) {
-                        this.log("Could not delete blacklisted name message", { message: e.message })
+                        this.log("Could not delete muted member message", { message: e.message })
                     }
                 })
         }
 
         // Alert in the group chat
-        const alertMsg = `⚠️ Potential scammer alert! "${displayName}" muted for using a blacklisted name.`
+        let alertMsg: string
+        if (muteType === 'fuzzy') {
+            alertMsg = `⚠️ Potential scammer alert! "${displayName}" muted — ${matchedKeyword}.`
+        } else {
+            alertMsg = `⚠️ Potential scammer alert! "${displayName}" muted for using a blacklisted name.`
+        }
         this.botApiProcessor.telegram.sendMessage(chatId, alertMsg)
-            .catch((e) => this.log("Could not send blacklist mute alert", { message: e.message }))
+            .catch((e) => this.log("Could not send mute alert", { message: e.message }))
     }
 
 
