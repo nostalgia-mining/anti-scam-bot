@@ -1203,14 +1203,17 @@ export class BotProcessor {
 
             // Log every chat_member event for debugging
             const isJoin = (oldMember.status === 'left' || oldMember.status === 'kicked') && newMember.status === 'member'
-            const isLeave = oldMember.status === 'member' && (newMember.status === 'left' || newMember.status === 'kicked')
+            const isBanned = newMember.status === 'kicked'
+            const isLeft = newMember.status === 'left' && oldMember.status !== 'left'
             const nameChanged = oldMember.status === 'member' && newMember.status === 'member' &&
                 (oldMember.user.first_name !== user.first_name || oldMember.user.last_name !== user.last_name)
 
             if (isJoin) {
                 this.log(`[chat_member] JOIN: ${displayName} (ID: ${user.id})`)
-            } else if (isLeave) {
-                this.log(`[chat_member] LEAVE: ${displayName} (ID: ${user.id})`)
+            } else if (isBanned) {
+                this.log(`[chat_member] BANNED: ${displayName} (ID: ${user.id})`)
+            } else if (isLeft) {
+                this.log(`[chat_member] LEFT: ${displayName} (ID: ${user.id})`)
             } else if (nameChanged) {
                 this.log(`[chat_member] NAME CHANGE: "${oldMember.user.first_name}${oldMember.user.last_name ? ' ' + oldMember.user.last_name : ''}" → "${user.first_name}${user.last_name ? ' ' + user.last_name : ''}" (ID: ${user.id})`)
             } else {
