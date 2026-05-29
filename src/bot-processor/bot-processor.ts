@@ -780,7 +780,7 @@ export class BotProcessor {
             return null
         }
 
-        const SIMILARITY_THRESHOLD = 0.70
+        const SIMILARITY_THRESHOLD = 0.85
         const userFull = this.normalizeHomoglyphs(member.first_name) + this.normalizeHomoglyphs(member.last_name)
         if (!userFull || userFull.length < 4) return null
 
@@ -1222,6 +1222,11 @@ export class BotProcessor {
 
             // Only process if the user is currently a member (not left/banned/restricted)
             if (newMember.status !== 'member' && newMember.status !== 'creator' && newMember.status !== 'administrator') {
+                return
+            }
+
+            // Skip restricted → member transitions (captcha bot approving a user)
+            if (oldMember.status === 'restricted' && newMember.status === 'member') {
                 return
             }
 
