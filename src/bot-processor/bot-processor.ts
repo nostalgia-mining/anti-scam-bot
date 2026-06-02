@@ -973,7 +973,8 @@ export class BotProcessor {
         }
     }
 
-
+    // Returns the matched blacklist keyword if the member's name contains a blacklisted word, null otherwise
+    private nameMatchesBlacklist(details: any): string | null {
         const blacklist: string[] = Array.isArray((this.botConfigurator.getConfiguration() as any).nameBlacklist)
             ? (this.botConfigurator.getConfiguration() as any).nameBlacklist
             : []
