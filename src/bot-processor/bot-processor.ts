@@ -1231,6 +1231,21 @@ export class BotProcessor {
 
             // Only process if the user is currently a member (not left/banned/restricted)
             if (newMember.status !== 'member' && newMember.status !== 'creator' && newMember.status !== 'administrator') {
+
+                // On leave or ban: check if departing user's name resembles an admin — DM scam warning
+                if ((isLeft || isBanned) && !this.isAdminMessage(user.id)) {
+                    const bannedResult = this.userShouldBeBanned(user)
+                    const fuzzyResult = bannedResult === null ? this.userShouldBeMuted(user) : null
+                    const matchedAdmin = bannedResult || (fuzzyResult ? fuzzyResult.adminName : null)
+
+                    if (matchedAdmin) {
+                        const warning = `⚠️ Warning: Member with ID: ${user.id} left the group using the name "${displayName}". They may attempt to impersonate an admin via private messages. Do not respond to any unsolicited DMs claiming to be from ${matchedAdmin}.\nAlways verify authenticity of such messages here in public.`
+                        this.log(`IMPERSONATOR DEPARTED — "${displayName}" (ID: ${user.id}) left while resembling admin "${matchedAdmin}"`)
+                        this.botApiProcessor.telegram.sendMessage(this.chatId, warning)
+                            .catch((e) => this.log("Could not send impersonator departure warning", { message: e.message }))
+                    }
+                }
+
                 return
             }
 
