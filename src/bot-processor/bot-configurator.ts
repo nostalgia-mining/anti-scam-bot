@@ -12,6 +12,9 @@ export class BotConfigurator {
         if (!Array.isArray(this.configuration.nameBlacklist)) {
             this.configuration.nameBlacklist = []
         }
+        if (!Array.isArray(this.configuration.autoBanKeywords)) {
+            this.configuration.autoBanKeywords = []
+        }
         this.botMessage = new BotMessage()
     }
 
@@ -145,13 +148,25 @@ export class BotConfigurator {
         const list: string[] = Array.isArray(this.configuration.nameBlacklist)
             ? this.configuration.nameBlacklist
             : []
+        const autoBanList: string[] = Array.isArray(this.configuration.autoBanKeywords)
+            ? this.configuration.autoBanKeywords
+            : []
 
         if (action === 'add') {
+            // Check cross-list conflict
+            const inAutoBan = autoBanList.includes(normalized)
+            if (inAutoBan) {
+                const idx = autoBanList.indexOf(normalized)
+                autoBanList.splice(idx, 1)
+                this.configuration.autoBanKeywords = autoBanList
+            }
             if (list.includes(normalized)) return `"${normalized}" is already in the blacklist.`
             list.push(normalized)
             this.configuration.nameBlacklist = list
             this.writeConfiguration(this.configuration)
-            return `"${normalized}" added to name blacklist.`
+            return inAutoBan
+                ? `"${normalized}" moved from auto-ban list to name blacklist.`
+                : `"${normalized}" added to name blacklist.`
         } else {
             const idx = list.indexOf(normalized)
             if (idx === -1) return `"${normalized}" was not found in the blacklist.`
@@ -159,6 +174,44 @@ export class BotConfigurator {
             this.configuration.nameBlacklist = list
             this.writeConfiguration(this.configuration)
             return `"${normalized}" removed from name blacklist.`
+        }
+    }
+
+    public processAutoBanKeywords(action: 'add' | 'remove', word: string): string {
+        const MIN_LENGTH = 6
+        const normalized = word.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+        if (!normalized) return 'Invalid keyword.'
+        if (normalized.length < MIN_LENGTH) return `"${normalized}" is too short (${normalized.length} chars, minimum is ${MIN_LENGTH}).`
+
+        const autoBanList: string[] = Array.isArray(this.configuration.autoBanKeywords)
+            ? this.configuration.autoBanKeywords
+            : []
+        const nameBlacklist: string[] = Array.isArray(this.configuration.nameBlacklist)
+            ? this.configuration.nameBlacklist
+            : []
+
+        if (action === 'add') {
+            // Check cross-list conflict
+            const inBlacklist = nameBlacklist.includes(normalized)
+            if (inBlacklist) {
+                const idx = nameBlacklist.indexOf(normalized)
+                nameBlacklist.splice(idx, 1)
+                this.configuration.nameBlacklist = nameBlacklist
+            }
+            if (autoBanList.includes(normalized)) return `"${normalized}" is already in the auto-ban list.`
+            autoBanList.push(normalized)
+            this.configuration.autoBanKeywords = autoBanList
+            this.writeConfiguration(this.configuration)
+            return inBlacklist
+                ? `"${normalized}" moved from name blacklist to auto-ban list.`
+                : `"${normalized}" added to auto-ban list.`
+        } else {
+            const idx = autoBanList.indexOf(normalized)
+            if (idx === -1) return `"${normalized}" was not found in the auto-ban list.`
+            autoBanList.splice(idx, 1)
+            this.configuration.autoBanKeywords = autoBanList
+            this.writeConfiguration(this.configuration)
+            return `"${normalized}" removed from auto-ban list.`
         }
     }
 

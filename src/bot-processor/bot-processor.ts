@@ -299,6 +299,26 @@ export class BotProcessor {
     private processMessage(message, ctx) {
         this.botMessage.displayMessage(`Received message: ${JSON.stringify(message, null, 2)}`)
 
+        // Auto-ban check on bot messages — silent delete if message contains an auto-ban keyword
+        if (message.from && message.from.is_bot) {
+            const textToCheck = [
+                message.text || '',
+                message.caption || '',
+                message.poll ? message.poll.question : ''
+            ].join(' ')
+            const autoBanKeyword = this.matchesAutoBan(textToCheck)
+            if (autoBanKeyword !== null) {
+                this.log(`AUTO-BAN KEYWORD in bot message — deleting message (ID: ${message.message_id}), keyword: "${autoBanKeyword}"`)
+                this.botApiProcessor.telegram.deleteMessage(message.chat.id, message.message_id)
+                    .catch((e) => {
+                        if (!e.message.includes('message to delete not found')) {
+                            this.log("Could not delete auto-ban bot message", { message: e.message })
+                        }
+                    })
+                return
+            }
+        }
+
         this.memberExists(message)
 
         let adminMessage = this.isAdminMessage(message.from.id)
@@ -485,6 +505,14 @@ export class BotProcessor {
                 } else if (this.lastConfigRule == "nameBlacklistRemove") {
                     this.lastConfigRule = ''
                     const result = this.botConfigurator.processNameBlacklist('remove', message.text)
+                    ctx.reply(result)
+                } else if (this.lastConfigRule == "autoBanAdd") {
+                    this.lastConfigRule = ''
+                    const result = this.botConfigurator.processAutoBanKeywords('add', message.text)
+                    ctx.reply(result)
+                } else if (this.lastConfigRule == "autoBanRemove") {
+                    this.lastConfigRule = ''
+                    const result = this.botConfigurator.processAutoBanKeywords('remove', message.text)
                     ctx.reply(result)
                 } else if (this.lastConfigRule == "mmApiId") {
                     const apiId = parseInt(message.text.trim())
@@ -828,6 +856,19 @@ export class BotProcessor {
 
             this.botMessage.displayMessage(`Check member: ${member.chatMemberId}, ${member.chatMemberFirstName} ${member.chatMemberLastName} ${member.chatMemberUserName}`)
 
+            // Auto-ban check — silent, no group message
+            const autoBanName = this.matchesAutoBan(
+                (details.first_name || '') + ' ' + (details.last_name || '') + ' ' + (details.username || '')
+            )
+            if (autoBanName !== null) {
+                const displayName = details.first_name +
+                    (details.last_name ? ' ' + details.last_name : '') +
+                    (details.username ? ' (@' + details.username + ')' : '')
+                await this.silentBan(details.id, this.chatId, displayName, `name matches auto-ban keyword "${autoBanName}"`, member.messageId)
+                this.checkingMembers.delete(member.chatMemberId)
+                return
+            }
+
             const impersonatedAdmin = this.userShouldBeBanned(details)
             if (impersonatedAdmin !== null &&
                 this.botConfigurator.getConfiguration().rules.checkAdmin.banUser == 0) {
@@ -902,8 +943,37 @@ export class BotProcessor {
         })
     }
 
-    // Returns the matched blacklist keyword if the member's name contains a blacklisted word, null otherwise
-    private nameMatchesBlacklist(details: any): string | null {
+    // Returns the matched auto-ban keyword if found in the normalized text, null otherwise
+    private matchesAutoBan(text: string): string | null {
+        const keywords: string[] = Array.isArray((this.botConfigurator.getConfiguration() as any).autoBanKeywords)
+            ? (this.botConfigurator.getConfiguration() as any).autoBanKeywords
+            : []
+        if (keywords.length === 0) return null
+        const normalized = text.toLowerCase().replace(/[^a-z0-9]/g, '')
+        for (const keyword of keywords) {
+            if (normalized.includes(keyword)) return keyword
+        }
+        return null
+    }
+
+    private async silentBan(userId: number, chatId: number, displayName: string, reason: string, messageId?: number) {
+        try {
+            await this.botApiProcessor.telegram.banChatMember(chatId, userId, 0)
+            this.log(`SILENT BAN — "${displayName}" (ID: ${userId}) banned: ${reason}`)
+        } catch (e) {
+            this.log(`Could not silent ban ${userId}`, { message: e.message })
+        }
+        if (messageId) {
+            this.botApiProcessor.telegram.deleteMessage(chatId, messageId)
+                .catch((e) => {
+                    if (!e.message.includes('message to delete not found')) {
+                        this.log("Could not delete auto-ban message", { message: e.message })
+                    }
+                })
+        }
+    }
+
+
         const blacklist: string[] = Array.isArray((this.botConfigurator.getConfiguration() as any).nameBlacklist)
             ? (this.botConfigurator.getConfiguration() as any).nameBlacklist
             : []
@@ -1335,6 +1405,9 @@ export class BotProcessor {
                         Markup.button.callback('🚫 Blacklisted Names', 'nameBlacklist')
                     ],
                     [
+                        Markup.button.callback('🔇 Auto-Ban Keywords', 'autoBan')
+                    ],
+                    [
                         Markup.button.callback('Set Reply Messages', 'replyMessages')
                     ],
                     [
@@ -1701,6 +1774,45 @@ export class BotProcessor {
             const reply = list.length === 0
                 ? 'Name blacklist is empty.'
                 : `Current blacklisted keywords (${list.length}):\n\n${list.map((w, i) => `${i + 1}. ${w}`).join('\n')}`
+            ctx.reply(reply)
+        })
+
+        // ── Auto-Ban Keywords ─────────────────────────────────────────────────
+        this.botApiProcessor.action('autoBan', (ctx) => {
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
+            const list: string[] = Array.isArray((this.botConfigurator.getConfiguration() as any).autoBanKeywords)
+                ? (this.botConfigurator.getConfiguration() as any).autoBanKeywords
+                : []
+            const count = list.length
+            const autoBanMenu = Markup.inlineKeyboard([
+                [Markup.button.callback('➕ Add', 'autoBanAdd'), Markup.button.callback('➖ Remove', 'autoBanRemove')],
+                [Markup.button.callback('📋 List', 'autoBanList')],
+                [Markup.button.callback('Back to Main Menu', 'mainMenu')]
+            ])
+            this.lastConfigRule = ''
+            ctx.reply(`Auto-Ban Keywords (${count} keyword${count !== 1 ? 's' : ''})\nOn join or bot message match: silent ban, no group alert.`, autoBanMenu)
+        })
+
+        this.botApiProcessor.action('autoBanAdd', (ctx) => {
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
+            this.lastConfigRule = 'autoBanAdd'
+            ctx.reply('Enter the keyword to add to the auto-ban list (minimum 6 chars, spaces/dots stripped automatically):')
+        })
+
+        this.botApiProcessor.action('autoBanRemove', (ctx) => {
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
+            this.lastConfigRule = 'autoBanRemove'
+            ctx.reply('Enter the keyword to remove from the auto-ban list:')
+        })
+
+        this.botApiProcessor.action('autoBanList', (ctx) => {
+            if (!this.isAdminMessage(ctx.callbackQuery.from.id)) return
+            const list: string[] = Array.isArray((this.botConfigurator.getConfiguration() as any).autoBanKeywords)
+                ? (this.botConfigurator.getConfiguration() as any).autoBanKeywords
+                : []
+            const reply = list.length === 0
+                ? 'Auto-ban list is empty.'
+                : `Current auto-ban keywords (${list.length}):\n\n${list.map((w, i) => `${i + 1}. ${w}`).join('\n')}`
             ctx.reply(reply)
         })
 
