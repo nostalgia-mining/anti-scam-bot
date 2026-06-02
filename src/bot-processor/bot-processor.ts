@@ -306,6 +306,7 @@ export class BotProcessor {
                 message.caption || '',
                 message.poll ? message.poll.question : ''
             ].join(' ')
+            this.log(`[bot-msg] from bot ID ${message.from.id} (@${message.from.username || 'no-username'}), text: "${textToCheck.substring(0, 80)}"`)
             const autoBanKeyword = this.matchesAutoBan(textToCheck)
             if (autoBanKeyword !== null) {
                 this.log(`AUTO-BAN KEYWORD in bot message — deleting message (ID: ${message.message_id}), keyword: "${autoBanKeyword}"`)
