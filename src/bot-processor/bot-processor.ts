@@ -848,14 +848,8 @@ export class BotProcessor {
 
         this.botApiProcessor.telegram.getChat(member.chatMemberId).then(async details => {
 
-            // Skip if this user is a known admin
-            if (this.chatAdmins.some(admin => admin.id == details.id)) {
-                this.checkingMembers.delete(member.chatMemberId)
-                return
-            }
-
-            // Skip bots — they can't be impersonators and can't be muted
-            if (details.is_bot) {
+            // Skip if this user is a known admin (use strict equality with type coercion for safety)
+            if (this.chatAdmins.some(admin => admin.id === details.id)) {
                 this.checkingMembers.delete(member.chatMemberId)
                 return
             }
@@ -967,7 +961,27 @@ export class BotProcessor {
             await this.botApiProcessor.telegram.banChatMember(chatId, userId, 0)
             this.log(`SILENT BAN — "${displayName}" (ID: ${userId}) banned: ${reason}`)
         } catch (e) {
-            this.log(`Could not silent ban ${userId}`, { message: e.message })
+            // If we can't ban because they're an admin, add them to our admin list
+            const errorMsg = (e.message || e.description || String(e)).toLowerCase()
+            if (errorMsg.includes('user is an administrator') || errorMsg.includes('administrator of the chat')) {
+                this.log(`Cannot ban ${userId} — user is an admin, adding to admin list`)
+                // Fetch their details and add to admin list
+                try {
+                    const details = await this.botApiProcessor.telegram.getChat(userId)
+                    this.chatAdmins.push({
+                        id: details.id,
+                        firstName: details.first_name || '',
+                        lastName: details.last_name || '',
+                        userName: details.username || ''
+                    })
+                    this.buildAdminSet()
+                    this.log(`Admin ${displayName} (ID: ${userId}) added to admin list`)
+                } catch (fetchErr) {
+                    this.log(`Failed to fetch details for admin ${userId}`, { message: fetchErr.message })
+                }
+                return // Don't proceed with message deletion
+            }
+            this.log(`Could not silent ban ${userId}`, { message: e.message || e.description || String(e) })
         }
         if (messageId) {
             this.botApiProcessor.telegram.deleteMessage(chatId, messageId)
@@ -1024,7 +1038,27 @@ export class BotProcessor {
                 this.log(`BLACKLISTED NAME — "${displayName}" muted for matching keyword "${matchedKeyword}"`)
             }
         } catch (e) {
-            this.log(`Could not mute member ${memberId}`, { message: e.message })
+            // If we can't mute because they're an admin, add them to our admin list
+            const errorMsg = (e.message || e.description || String(e)).toLowerCase()
+            if (errorMsg.includes('user is an administrator') || errorMsg.includes('administrator of the chat')) {
+                this.log(`Cannot mute ${memberId} — user is an admin, adding to admin list`)
+                // Fetch their details and add to admin list
+                try {
+                    const details = await this.botApiProcessor.telegram.getChat(memberId)
+                    this.chatAdmins.push({
+                        id: details.id,
+                        firstName: details.first_name || '',
+                        lastName: details.last_name || '',
+                        userName: details.username || ''
+                    })
+                    this.buildAdminSet()
+                    this.log(`Admin ${displayName} (ID: ${memberId}) added to admin list`)
+                } catch (fetchErr) {
+                    this.log(`Failed to fetch details for admin ${memberId}`, { message: fetchErr.message })
+                }
+                return // Don't proceed with message deletion or alerts
+            }
+            this.log(`Could not mute member ${memberId}`, { message: e.message || e.description || String(e) })
         }
 
         // Delete the triggering message if present
