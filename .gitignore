@@ -2,6 +2,9 @@ node_modules/
 logs/
 out/
 
+# NPM lock file - auto-generated, not needed in version control
+package-lock.json
+
 # Environment config — contains bot token and chat ID
 src/environments/environment.ts
 
