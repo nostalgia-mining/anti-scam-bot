@@ -855,6 +855,12 @@ export class BotProcessor {
                 return
             }
 
+            // Skip bots — they can't be impersonators and can't be muted
+            if (details.is_bot) {
+                this.checkingMembers.delete(member.chatMemberId)
+                return
+            }
+
             this.botMessage.displayMessage(`Check member: ${member.chatMemberId}, ${member.chatMemberFirstName} ${member.chatMemberLastName} ${member.chatMemberUserName}`)
 
             // Auto-ban check — silent, no group message
