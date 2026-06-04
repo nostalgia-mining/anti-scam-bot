@@ -1,22 +1,96 @@
-# Anti-Scam Bot for Telegram - by nostalgia
+# Anti-Scam Bot for Telegram — by nostalgia
 
-A Telegram group moderation bot focused on detecting and banning admin impersonators (scammers), with additional content moderation features.
+A Telegram group moderation bot focused on detecting and banning admin impersonators and spam bots, with layered content moderation features.
 
 > Based on [zenchain's telegram-bot-monitor](https://github.com/zenchain-protocol/telegram-bot-monitor), significantly extended and refactored.
 
 ---
 
-## Features
+## What's new vs the original zenchain bot
 
-- **Admin impersonation detection** — detects users whose name matches an admin's name and bans them automatically
-- **Unicode-aware name normalization** — handles lookalike characters, zero-width spaces, and Cyrillic tricks
+The original zenchain bot offered basic content moderation (bad words, URLs, wallet addresses, media). This fork adds a completely new security layer focused on **scammer and impersonator detection**, plus several quality-of-life improvements.
+
+### Impersonation Detection — 4-layer system
+
+The original bot had no impersonation detection at all. This fork builds a full multi-layer system:
+
+| Layer | Method | Action |
+|-------|--------|--------|
+| 1 | Exact normalized name match | **Ban** |
+| 2 | Homoglyph normalization (Cyrillic/Greek lookalikes → Latin) | **Ban** |
+| 3 | Substring containment ≥ 85% similarity | **Mute** |
+| 4 | Jaro-Winkler fuzzy similarity ≥ 85% | **Mute** |
+
+- Layers 1 & 2 result in an **immediate ban** with group notification
+- Layers 3 & 4 result in a **mute** with a scammer alert posted to the group
+- All 4 layers run on **every message** and on **every join event**
+- Admin names shorter than 4 characters are flagged at startup with a warning
+
+### Departing Impersonator Warnings
+
+When a user **leaves or gets banned** while using a name that resembles an admin (any of the 4 layers), the bot posts a public warning to the group:
+
+> ⚠️ Warning: Member with ID: X left the group using the name "Y". They may attempt to impersonate an admin via private messages. Do not respond to any unsolicited DMs claiming to be from [admin]. Always verify authenticity of such messages here in public.
+
+### Name Blacklist
+
+A configurable list of banned display names. Any member whose name contains a blacklisted keyword gets **muted** and a group alert is posted. Managed via the inline config menu.
+
+### Auto-Ban Keywords (Silent Ban)
+
+A separate keyword list for **silent, zero-noise bans**. Designed for obvious spam bots (e.g. CSAM advertisers):
+
+- On **join**: if the member's display name contains a keyword → **silent ban** (no group message)
+- On **bot message**: if the message text contains a keyword → **silent delete**
+- Normalization strips all punctuation and spaces before matching, so `CHI .LD PO.RN` matches `childporn`
+- **L33tspeak normalization**: digit substitutions applied before matching (`1→i`, `0→o`, `3→e`, `5→s`, `8→b`), so `ch1ldp0rn` matches `childporn`
+- Minimum 6 characters enforced to reduce false positive risk
+- Conflict detection: adding a keyword already in the name blacklist moves it to the correct list with a warning
+
+### Bot-to-Bot Message Processing
+
+Enabled via BotFather's "Bot-to-Bot Communication" mode. The bot now reads messages from other bots in the group. Combined with auto-ban keywords, it can **delete captcha poll messages** sent by other bots if their text contains a banned keyword (e.g. a CSAM advertiser joining triggers a captcha with their name in it — the captcha itself gets deleted immediately).
+
+### Self-Healing Admin Detection
+
+Telegram's `getChatAdministrators()` API does not always return all admin bots. When a mute or ban attempt fails with "user is an administrator" error, the bot automatically:
+
+1. Catches the error
+2. Fetches the user's details
+3. Adds them to the in-memory admin list
+4. Rebuilds the admin set
+
+All future checks for that user are skipped. No manual configuration needed.
+
+### Impersonator Report Command
+
+`/report@botname` posted in the group chat replies with the last 10 banned impersonators — names, usernames, IDs, and ban dates.
+
+### Upgraded Dependencies
+
+The original bot used Telegraf 3.x, TypeORM 0.1.x, and TypeScript 2.9. This fork upgrades to:
+
+- **Telegraf 4.x** — updated API (`Markup.inlineKeyboard`, `banChatMember`, `launch`)
+- **TypeORM 0.3.x** — `DataSource`, `findOneBy`, `delete`
+- **TypeScript 4.9**
+- **sqlite3 5.x**, **pg 8.x**, **ts-node 10.x**
+
+---
+
+## Full Feature List
+
+- **4-layer admin impersonation detection** — exact, homoglyph, substring, fuzzy (Jaro-Winkler)
+- **Departing impersonator warnings** — public alert when a suspected impersonator leaves
+- **Name blacklist** — mute members matching configurable keywords
+- **Auto-ban keywords** — silent ban on join + delete bot messages, with l33tspeak normalization
+- **Bot-to-bot message processing** — reads and acts on messages from other bots
+- **Self-healing admin detection** — auto-adds bot admins missed by Telegram API
 - **Content moderation** — configurable rules for bad words, URLs, wallet addresses, images, audio, video
 - **Warning system** — configurable number of warnings before a ban
 - **Permanent bans** — all bans are permanent (not temporary kicks)
 - **Member management** — export/import member list, cross-check for deleted/banned accounts
-- **Impersonator report** — `/report@botname` command shows last 10 banned impersonators in group chat
-- **Network resilience** — auto-restart after network disconnection
-- **Daily log rotation** — logs rotate daily with 7-day retention and automatic archiving
+- **Impersonator report** — `/report@botname` shows last 10 banned impersonators
+- **Daily log rotation** — logs rotate daily with timestamped filenames
 - **Telegram config menu** — all settings configurable via inline keyboard in private chat with the bot
 
 ---
@@ -27,7 +101,8 @@ A Telegram group moderation bot focused on detecting and banning admin impersona
 - Python 3.10+ (for member management scripts)
 - SQLite3
 - A Telegram bot token (from [@BotFather](https://t.me/BotFather))
-- Telethon API credentials (from [my.telegram.org](https://my.telegram.org)) — for member management features
+- Bot must be a group **administrator** with ban and delete permissions
+- Telethon API credentials (from [my.telegram.org](https://my.telegram.org)) — for member management features only
 
 ---
 
@@ -81,6 +156,8 @@ Available settings:
 - Set number of warnings before ban
 - Set custom reply messages
 - Manage banned words
+- Add/remove name blacklist keywords
+- Add/remove auto-ban keywords
 - Configure Telethon API credentials for member management
 
 ---
@@ -102,8 +179,6 @@ Access these via the **Member Management** button in the config menu.
 
 ## Running as a Service
 
-To run the bot automatically on system startup:
-
 ```ini
 # /etc/systemd/system/telegram-bot.service
 [Unit]
@@ -113,8 +188,8 @@ After=network.target
 [Service]
 Type=simple
 User=YOUR_USERNAME
-WorkingDirectory=/path/to/nostalgia-anti-scam-bot
-ExecStart=/bin/bash /path/to/nostalgia-anti-scam-bot/start.sh
+WorkingDirectory=/path/to/anti-scam-bot
+ExecStart=/bin/bash /path/to/anti-scam-bot/start.sh
 Restart=on-failure
 RestartSec=10
 
