@@ -67,5 +67,5 @@
 
 ---
 
-*Versions 0.3.1 and below are from the original [zenchain-protocol/telegram-bot-monitor](https://github.com/zenchain-protocol/telegram-bot-monitor).*
+*Versions 0.3.1 and below are from the original [ZenchainSoftware/telegram-bot-monitor](https://github.com/ZenchainSoftware/telegram-bot-monitor).*
 *Versions 0.4.0 and above are maintained by nostalgia.*

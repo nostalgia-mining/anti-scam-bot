@@ -101,12 +101,64 @@ The original bot used Telegraf 3.x, TypeORM 0.1.x, and TypeScript 2.9. This fork
 - Python 3.10+ (for member management scripts)
 - SQLite3
 - A Telegram bot token (from [@BotFather](https://t.me/BotFather))
-- Bot must be a group **administrator** with ban and delete permissions
+- Bot must be a group **administrator** with ban and delete message permissions
 - Telethon API credentials (from [my.telegram.org](https://my.telegram.org)) — for member management features only
 
 ---
 
-## Setup
+## Setup Guide
+
+### Step 1 — Create your bot with BotFather
+
+1. Open [@BotFather](https://t.me/botfather) on Telegram
+2. Send `/newbot`
+3. Enter a display name for your bot, e.g. `MyGroupAntiScamBot`
+4. Enter a username (must end in `bot`), e.g. `MyGroupAntiScamBotbot`
+5. BotFather will reply with your **bot token** — save it, you'll need it in Step 4
+
+### Step 2 — Configure bot settings in BotFather
+
+These settings must be applied **before** adding the bot to your group.
+
+**Disable privacy mode** (required so the bot can read all group messages):
+
+1. Send `/mybots` to BotFather
+2. Select your bot
+3. Go to **Bot Settings → Group Privacy → Turn off**
+
+**Enable reading messages from other bots** (required for captcha poll deletion):
+
+1. In the same Bot Settings menu, go to **Bot Settings → Allow Groups → Turn on**
+2. Then go to **Bot Settings** and look for **Group and Channel Messages** — enable **"Allow reading all group messages from bots"**
+
+> Note: This option was introduced by Telegram in May 2026. If you don't see it, update your Telegram app.
+
+**Allow joining groups:**
+
+1. In Bot Settings, go to **Allow Groups → All Groups**
+
+### Step 3 — Add the bot to your group as administrator
+
+1. Open your Telegram group
+2. Tap the group name in the header → **Add Member**
+3. Search for your bot's username and add it
+4. Go to group **Settings → Administrators → Add Admin**, select your bot
+5. Grant the following permissions:
+   - ✅ Delete messages
+   - ✅ Ban users
+   - ✅ Add new admins (optional, not required)
+   - Leave everything else at default
+
+### Step 4 — Get your group's Chat ID
+
+1. Send any message to your group
+2. Open this URL in your browser (replace `<botToken>` with your actual token):
+   ```
+   https://api.telegram.org/bot<botToken>/getUpdates
+   ```
+3. Look for `"chat":{"id":` in the response — that negative number is your Chat ID (e.g. `-1001234567890`)
+
+### Step 5 — Install and configure the bot
 
 1. **Clone the repo**
    ```bash
@@ -119,37 +171,39 @@ The original bot used Telegraf 3.x, TypeORM 0.1.x, and TypeScript 2.9. This fork
    npm install
    ```
 
-3. **Install Python dependencies**
+3. **Install Python dependencies** (member management scripts only)
    ```bash
    pip3 install telethon requests
    ```
 
-4. **Configure the bot**
+4. **Create the config file**
    ```bash
    cp src/environments/environment.ts.dist src/environments/environment.ts
    ```
    Edit `src/environments/environment.ts` and set:
-   - `botToken` — your bot token from BotFather
-   - `chatId` — your group's chat ID (negative number for supergroups)
+   - `botToken` — your bot token from Step 1
+   - `chatId` — your group's Chat ID from Step 4
 
-   > **Important:** `src/environments/environment.ts` is listed in `.gitignore` and will never be committed. It contains your bot token and should never be pushed to any repository. The `.dist` file is the safe placeholder kept in the repo for reference.
+   > **Important:** `src/environments/environment.ts` is listed in `.gitignore` and will never be committed. It contains your bot token and must never be pushed to any repository. The `.dist` file is the safe placeholder kept in the repo for reference.
 
 5. **Set up the database**
    ```bash
    sqlite3 zenchain_bot_sqlite.db < db/bot_db_sqlite.sql
    ```
 
-6. **Run the bot**
+6. **Start the bot**
    ```bash
    chmod +x start.sh
    ./start.sh
    ```
 
+   You should see the startup banner with the bot version, followed by confirmation of the group name and member count.
+
 ---
 
 ## Configuration
 
-All settings can be changed via the bot's inline config menu. Send `menu` to the bot in a private chat to access it.
+All settings can be changed via the bot's inline config menu. Send `menu` to the bot in a **private chat** (not the group) to access it.
 
 Available settings:
 - Enable/disable each moderation rule
@@ -179,6 +233,8 @@ Access these via the **Member Management** button in the config menu.
 
 ## Running as a Service
 
+To keep the bot running after you close your terminal and auto-restart on failure:
+
 ```ini
 # /etc/systemd/system/telegram-bot.service
 [Unit]
@@ -207,5 +263,5 @@ sudo systemctl start telegram-bot
 
 ## Credits
 
-- Original project: [zenchain-protocol/telegram-bot-monitor](https://github.com/zenchain-protocol/telegram-bot-monitor)
+- Original project: [ZenchainSoftware/telegram-bot-monitor](https://github.com/ZenchainSoftware/telegram-bot-monitor)
 - Extended and maintained by: nostalgia
