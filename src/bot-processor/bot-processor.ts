@@ -944,12 +944,21 @@ export class BotProcessor {
     }
 
     // Returns the matched auto-ban keyword if found in the normalized text, null otherwise
+    // Applies l33tspeak digit substitution (1→i, 0→o, 3→e, 5→s, 8→b) before matching,
+    // so a single keyword like "childporn" catches "ch1ldp0rn", "ch.. 1ld... por!! n", etc.
     private matchesAutoBan(text: string): string | null {
         const keywords: string[] = Array.isArray((this.botConfigurator.getConfiguration() as any).autoBanKeywords)
             ? (this.botConfigurator.getConfiguration() as any).autoBanKeywords
             : []
         if (keywords.length === 0) return null
-        const normalized = text.toLowerCase().replace(/[^a-z0-9]/g, '')
+        const normalized = text
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '')   // strip everything except letters and digits
+            .replace(/1/g, 'i')           // l33tspeak: 1 → i
+            .replace(/0/g, 'o')           // l33tspeak: 0 → o
+            .replace(/3/g, 'e')           // l33tspeak: 3 → e
+            .replace(/5/g, 's')           // l33tspeak: 5 → s
+            .replace(/8/g, 'b')           // l33tspeak: 8 → b
         for (const keyword of keywords) {
             if (normalized.includes(keyword)) return keyword
         }
