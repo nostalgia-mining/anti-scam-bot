@@ -2,7 +2,7 @@
 
 A Telegram group moderation bot focused on detecting and banning admin impersonators and spam bots, with layered content moderation features.
 
-> Based on [zenchain's telegram-bot-monitor](https://github.com/zenchain-protocol/telegram-bot-monitor), significantly extended and refactored.
+> Based on [ZenchainSoftware/telegram-bot-monitor](https://github.com/ZenchainSoftware/telegram-bot-monitor), significantly extended and refactored.
 
 ---
 
